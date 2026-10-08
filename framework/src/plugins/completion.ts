@@ -52,7 +52,7 @@ const completion: CommandModule = {
     query: {
       summary: 'Return NUL-delimited completion records for words after --',
       options: [{ name: 'index', type: 'string' }],
-      run(ctx) {
+      async run(ctx) {
         const raw = option(ctx.values, 'index')
         if (raw === undefined || !/^\d+$/.test(raw)) {
           throw usageError('--index must be a nonnegative integer')
@@ -61,7 +61,7 @@ const completion: CommandModule = {
         if (!Number.isSafeInteger(index) || ctx.tail.length === 0 || index > ctx.tail.length) {
           throw usageError('--index must identify a word after --, or the empty word immediately after them')
         }
-        const result = completeWords(commands(), ctx.tail, index)
+        const result = await completeWords(commands(), ctx.tail, index)
         write([result.kind, result.prefix, result.replacementPrefix, ...result.candidates].join('\0') + '\0')
       },
     },

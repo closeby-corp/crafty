@@ -45,171 +45,171 @@ function complete(registry: RegisteredCommand[], ...words: string[]) {
 const empty = (prefix = ''): CompletionResult => ({ kind: 'values', prefix, replacementPrefix: '', candidates: [] })
 
 describe('metadata completion', () => {
-  test('root candidates are sorted, unique, alias-aware and limited to root-supported flags', () => {
+  test('root candidates are sorted, unique, alias-aware and limited to root-supported flags', async () => {
     const { registry } = fixture()
-    expect(complete(registry, '')).toEqual({
+    expect((await complete(registry, ''))).toEqual({
       kind: 'values', prefix: '', replacementPrefix: '',
       candidates: ['--config', '--help', '-c', '-h', 'help', 'p', 'plain', 'project', 'repeat'],
     })
-    expect(complete(registry, 'p').candidates).toEqual(['p', 'plain', 'project'])
-    expect(complete(registry, '--f')).toEqual(empty('--f'))
-    expect(complete(registry, '-c').candidates).toEqual(['-c'])
-    expect(complete(registry, '-cpath')).toEqual(empty('-cpath'))
-    expect(complete(registry, '-vh', '')).toEqual(empty())
+    expect((await complete(registry, 'p')).candidates).toEqual(['p', 'plain', 'project'])
+    expect((await complete(registry, '--f'))).toEqual(empty('--f'))
+    expect((await complete(registry, '-c')).candidates).toEqual(['-c'])
+    expect((await complete(registry, '-cpath'))).toEqual(empty('-cpath'))
+    expect((await complete(registry, '-vh', ''))).toEqual(empty())
   })
 
-  test('static children and aliases win over an earlier dynamic parameter', () => {
+  test('static children and aliases win over an earlier dynamic parameter', async () => {
     const { registry } = fixture()
-    expect(complete(registry, 'p', 'l').candidates).toEqual(['list', 'ls'])
-    const list = complete(registry, 'p', 'ls', '').candidates
+    expect((await complete(registry, 'p', 'l')).candidates).toEqual(['list', 'ls'])
+    const list = (await complete(registry, 'p', 'ls', '')).candidates
     expect(list).toContain('--list-only')
     expect(list).not.toContain('--dynamic')
-    const dynamic = complete(registry, 'p', 'some-id', '').candidates
+    const dynamic = (await complete(registry, 'p', 'some-id', '')).candidates
     expect(dynamic).toContain('inspect')
     expect(dynamic).toContain('--dynamic')
     expect(dynamic).not.toContain(':id')
-    expect(complete(registry, 'p', '').candidates).not.toContain(':id')
+    expect((await complete(registry, 'p', '')).candidates).not.toContain(':id')
   })
 
-  test('suggests inherited flags only while resolving nested aliases', () => {
+  test('suggests inherited flags only while resolving nested aliases', async () => {
     const { registry } = fixture()
-    const root = complete(registry, 'project', '').candidates
+    const root = (await complete(registry, 'project', '')).candidates
     expect(root).toContain('--mode')
     expect(root).toContain('--format')
     expect(root).not.toContain('--depth')
     expect(root).not.toContain('--remote-only')
-    const remote = complete(registry, 'p', 'r', '').candidates
+    const remote = (await complete(registry, 'p', 'r', '')).candidates
     expect(remote).toContain('fetch')
     expect(remote).toContain('f')
     expect(remote).toContain('--remote-only')
     expect(remote).not.toContain('--depth')
-    const leaf = complete(registry, 'p', 'r', 'f', '').candidates
+    const leaf = (await complete(registry, 'p', 'r', 'f', '')).candidates
     expect(leaf).toContain('--depth')
     expect(leaf).toContain('--mode')
     expect(leaf).not.toContain('fetch')
     expect(leaf).not.toContain('--list-only')
   })
 
-  test('help, --help and -h route through root aliases and nested commands', () => {
+  test('help, --help and -h route through root aliases and nested commands', async () => {
     const { registry } = fixture()
     for (const help of ['help', '--help', '-h']) {
-      expect(complete(registry, help, 'p').candidates).toEqual(['p', 'plain', 'project'])
-      expect(complete(registry, help, 'p', 'r', 'f', '--dep').candidates).toEqual(['--depth'])
+      expect((await complete(registry, help, 'p')).candidates).toEqual(['p', 'plain', 'project'])
+      expect((await complete(registry, help, 'p', 'r', 'f', '--dep')).candidates).toEqual(['--depth'])
     }
-    expect(complete(registry, 'help', 'help', '')).toEqual(empty())
+    expect((await complete(registry, 'help', 'help', ''))).toEqual(empty())
   })
 
-  test('consumes descendant option values before and between routes without treating them as routes', () => {
+  test('consumes descendant option values before and between routes without treating them as routes', async () => {
     const { registry } = fixture()
-    expect(complete(registry, 'project', '--depth', 'list', 'r', '').candidates).toContain('fetch')
-    expect(complete(registry, 'project', 'r', '-n', 'list', 'f', '--dep').candidates).toEqual(['--depth'])
-    expect(complete(registry, 'project', '--depth', 'a')).toEqual({
+    expect((await complete(registry, 'project', '--depth', 'list', 'r', '')).candidates).toContain('fetch')
+    expect((await complete(registry, 'project', 'r', '-n', 'list', 'f', '--dep')).candidates).toEqual(['--depth'])
+    expect((await complete(registry, 'project', '--depth', 'a'))).toEqual({
       kind: 'values', prefix: 'a', replacementPrefix: '', candidates: ['all'],
     })
-    expect(complete(registry, 'project', '--depth=all', 'r', 'f', '--dep').candidates).toEqual(['--depth'])
+    expect((await complete(registry, 'project', '--depth=all', 'r', 'f', '--dep')).candidates).toEqual(['--depth'])
   })
 
-  test('completes separate and attached enum values, retaining equals within the value', () => {
+  test('completes separate and attached enum values, retaining equals within the value', async () => {
     const { registry } = fixture()
-    expect(complete(registry, 'project', '--mode', 'fa')).toEqual({
+    expect((await complete(registry, 'project', '--mode', 'fa'))).toEqual({
       kind: 'values', prefix: 'fa', replacementPrefix: '', candidates: ['fast', 'fast=exact'],
     })
-    expect(complete(registry, 'project', '--mode=fast=')).toEqual({
+    expect((await complete(registry, 'project', '--mode=fast='))).toEqual({
       kind: 'values', prefix: 'fast=', replacementPrefix: '--mode=', candidates: ['fast=exact'],
     })
-    expect(complete(registry, 'project', '-m', 's').candidates).toEqual(['slow'])
-    expect(complete(registry, 'project', '-mfa')).toEqual({
+    expect((await complete(registry, 'project', '-m', 's')).candidates).toEqual(['slow'])
+    expect((await complete(registry, 'project', '-mfa'))).toEqual({
       kind: 'values', prefix: 'fa', replacementPrefix: '-m', candidates: ['fast', 'fast=exact'],
     })
-    expect(complete(registry, 'project', '-m=fa')).toEqual({
+    expect((await complete(registry, 'project', '-m=fa'))).toEqual({
       kind: 'values', prefix: '=fa', replacementPrefix: '-m', candidates: [],
     })
-    expect(complete(registry, 'project', '--mode', '').candidates).toEqual(['$(literal)', 'fast', 'fast=exact', 'slow', 'two words'])
-    expect(complete(registry, 'project', '--mode').candidates).toEqual(['--mode'])
+    expect((await complete(registry, 'project', '--mode', '')).candidates).toEqual(['$(literal)', 'fast', 'fast=exact', 'slow', 'two words'])
+    expect((await complete(registry, 'project', '--mode')).candidates).toEqual(['--mode'])
   })
 
-  test('boolean short clusters consume no route words and a string ends its cluster', () => {
+  test('boolean short clusters consume no route words and a string ends its cluster', async () => {
     const { registry } = fixture()
-    expect(complete(registry, 'project', '-vq', 'r', 'f', '--dep').candidates).toEqual(['--depth'])
-    expect(complete(registry, 'project', '-vqm', 'list', 'r', '').candidates).toContain('fetch')
-    expect(complete(registry, 'project', '-vqmfa')).toEqual({
+    expect((await complete(registry, 'project', '-vq', 'r', 'f', '--dep')).candidates).toEqual(['--depth'])
+    expect((await complete(registry, 'project', '-vqm', 'list', 'r', '')).candidates).toContain('fetch')
+    expect((await complete(registry, 'project', '-vqmfa'))).toEqual({
       kind: 'values', prefix: 'fa', replacementPrefix: '-vqm', candidates: ['fast', 'fast=exact'],
     })
-    expect(complete(registry, 'project', '-vqmfast', 'r', '').candidates).toContain('fetch')
-    expect(complete(registry, 'project', '--verbose=true', '')).toEqual(empty())
-    expect(complete(registry, 'project', '-vx', '')).toEqual(empty())
+    expect((await complete(registry, 'project', '-vqmfast', 'r', '')).candidates).toContain('fetch')
+    expect((await complete(registry, 'project', '--verbose=true', ''))).toEqual(empty())
+    expect((await complete(registry, 'project', '-vx', ''))).toEqual(empty())
   })
 
-  test('does not infer values for opaque string options or suggest routes in their place', () => {
+  test('does not infer values for opaque string options or suggest routes in their place', async () => {
     const { registry } = fixture()
-    expect(complete(registry, 'project', '--opaque', 'l')).toEqual(empty('l'))
-    expect(complete(registry, 'project', '--opaque=l')).toEqual({ ...empty('l'), replacementPrefix: '--opaque=' })
-    expect(complete(registry, 'project', '-ol')).toEqual({ ...empty('l'), replacementPrefix: '-o' })
-    expect(complete(registry, 'project', '--opaque', 'list', 'r', '').candidates).toContain('fetch')
-    expect(complete(registry, 'project', '--mode', '--ver')).toEqual(empty('--ver'))
+    expect((await complete(registry, 'project', '--opaque', 'l'))).toEqual(empty('l'))
+    expect((await complete(registry, 'project', '--opaque=l'))).toEqual({ ...empty('l'), replacementPrefix: '--opaque=' })
+    expect((await complete(registry, 'project', '-ol'))).toEqual({ ...empty('l'), replacementPrefix: '-o' })
+    expect((await complete(registry, 'project', '--opaque', 'list', 'r', '')).candidates).toContain('fetch')
+    expect((await complete(registry, 'project', '--mode', '--ver'))).toEqual(empty('--ver'))
   })
 
-  test('uses explicit filesystem modes without scanning or synthesizing path candidates', () => {
+  test('uses explicit filesystem modes without scanning or synthesizing path candidates', async () => {
     const { registry } = fixture()
-    expect(complete(registry, '--config', 'my path/')).toEqual({ kind: 'file', prefix: 'my path/', replacementPrefix: '', candidates: [] })
-    expect(complete(registry, '--config=my path/')).toEqual({ kind: 'file', prefix: 'my path/', replacementPrefix: '--config=', candidates: [] })
-    expect(complete(registry, 'project', '-cmy path/')).toEqual({ kind: 'file', prefix: 'my path/', replacementPrefix: '-c', candidates: [] })
-    expect(complete(registry, 'project', '-dtmp/')).toEqual({ kind: 'directory', prefix: 'tmp/', replacementPrefix: '-d', candidates: [] })
-    expect(complete(registry, 'project', '--directory', 'tmp/')).toEqual({ kind: 'directory', prefix: 'tmp/', replacementPrefix: '', candidates: [] })
+    expect((await complete(registry, '--config', 'my path/'))).toEqual({ kind: 'file', prefix: 'my path/', replacementPrefix: '', candidates: [] })
+    expect((await complete(registry, '--config=my path/'))).toEqual({ kind: 'file', prefix: 'my path/', replacementPrefix: '--config=', candidates: [] })
+    expect((await complete(registry, 'project', '-cmy path/'))).toEqual({ kind: 'file', prefix: 'my path/', replacementPrefix: '-c', candidates: [] })
+    expect((await complete(registry, 'project', '-dtmp/'))).toEqual({ kind: 'directory', prefix: 'tmp/', replacementPrefix: '-d', candidates: [] })
+    expect((await complete(registry, 'project', '--directory', 'tmp/'))).toEqual({ kind: 'directory', prefix: 'tmp/', replacementPrefix: '', candidates: [] })
   })
 
-  test('extracts config before root and before command value parsing', () => {
+  test('extracts config before root and before command value parsing', async () => {
     const { registry } = fixture()
     for (const prefix of [['--config', 'a.json'], ['--config=a.json'], ['-c', 'a.json']]) {
-      expect(complete(registry, ...prefix, 'p', 'r', 'f', '--dep').candidates).toEqual(['--depth'])
+      expect((await complete(registry, ...prefix, 'p', 'r', 'f', '--dep')).candidates).toEqual(['--depth'])
     }
-    expect(complete(registry, 'project', '--mode', '--config', 'a.json', 'list', 'r', '').candidates).toContain('fetch')
-    expect(complete(registry, 'project', '--mode', '--config=a.json', 'fa').candidates).toEqual(['fast', 'fast=exact'])
-    expect(complete(registry, '-cpath', 'p', '')).toEqual(empty())
-    expect(complete(registry, '--config', '--mode', '')).toEqual(empty())
+    expect((await complete(registry, 'project', '--mode', '--config', 'a.json', 'list', 'r', '')).candidates).toContain('fetch')
+    expect((await complete(registry, 'project', '--mode', '--config=a.json', 'fa')).candidates).toEqual(['fast', 'fast=exact'])
+    expect((await complete(registry, '-cpath', 'p', ''))).toEqual(empty())
+    expect((await complete(registry, '--config', '--mode', ''))).toEqual(empty())
   })
 
-  test('repeatable options consume flag-looking values before route parsing', () => {
+  test('repeatable options consume flag-looking values before route parsing', async () => {
     const { registry } = fixture()
-    expect(complete(registry, 'repeat', '--tag', '--unknown', 'go', '--h').candidates).toEqual(['--help'])
-    expect(complete(registry, 'repeat', '--tag=blue', '--tag', 'red', 'g').candidates).toEqual(['go'])
-    expect(complete(registry, 'repeat', '--tag', 'b').candidates).toEqual(['blue'])
-    expect(complete(registry, 'repeat', '--tag=b')).toEqual({ kind: 'values', prefix: 'b', replacementPrefix: '--tag=', candidates: ['blue'] })
-    expect(complete(registry, 'repeat', '--raw', 'g')).toEqual(empty('g'))
-    expect(complete(registry, 'repeat', '--raw', 'ignored', 'g').candidates).toEqual(['go'])
+    expect((await complete(registry, 'repeat', '--tag', '--unknown', 'go', '--h')).candidates).toEqual(['--help'])
+    expect((await complete(registry, 'repeat', '--tag=blue', '--tag', 'red', 'g')).candidates).toEqual(['go'])
+    expect((await complete(registry, 'repeat', '--tag', 'b')).candidates).toEqual(['blue'])
+    expect((await complete(registry, 'repeat', '--tag=b'))).toEqual({ kind: 'values', prefix: 'b', replacementPrefix: '--tag=', candidates: ['blue'] })
+    expect((await complete(registry, 'repeat', '--raw', 'g'))).toEqual(empty('g'))
+    expect((await complete(registry, 'repeat', '--raw', 'ignored', 'g')).candidates).toEqual(['go'])
   })
 
-  test('standalone -- stops all metadata completion, including pending values', () => {
+  test('standalone -- stops all metadata completion, including pending values', async () => {
     const { registry } = fixture()
     for (const head of [[], ['project'], ['project', '--mode'], ['repeat', '--raw']]) {
-      expect(complete(registry, ...head, '--', '--config=x')).toEqual(empty('--config=x'))
+      expect((await complete(registry, ...head, '--', '--config=x'))).toEqual(empty('--config=x'))
     }
-    expect(complete(registry, 'project', '--mode=--', 'r', 'f', '--dep').candidates).toEqual(['--depth'])
+    expect((await complete(registry, 'project', '--mode=--', 'r', 'f', '--dep')).candidates).toEqual(['--depth'])
   })
 
-  test('unknown roots and routes stop traversal, while handler positionals do not become routes', () => {
+  test('unknown roots and routes stop traversal, while handler positionals do not become routes', async () => {
     const { registry } = fixture()
-    expect(complete(registry, 'missing', '')).toEqual(empty())
-    expect(complete(registry, 'project', 'r', 'missing', '')).toEqual(empty())
-    expect(complete(registry, 'plain', 'arbitrary', '--h').candidates).toEqual(['--help'])
-    expect(complete(registry, 'project', 'r', 'missing', '--config=x')).toEqual(empty('--config=x'))
+    expect((await complete(registry, 'missing', ''))).toEqual(empty())
+    expect((await complete(registry, 'project', 'r', 'missing', ''))).toEqual(empty())
+    expect((await complete(registry, 'plain', 'arbitrary', '--h')).candidates).toEqual(['--help'])
+    expect((await complete(registry, 'project', 'r', 'missing', '--config=x'))).toEqual(empty('--config=x'))
   })
 
-  test('ignores words after the cursor and supports an absent empty current word', () => {
+  test('ignores words after the cursor and supports an absent empty current word', async () => {
     const { registry } = fixture()
-    expect(completeWords(registry, ['tool', 'project', 'r', 'f', '--depth', 'all'], 2).candidates).toEqual(['r', 'remote'])
-    expect(completeWords(registry, ['tool', 'project', 'r'], 3).candidates).toContain('fetch')
-    expect(completeWords(registry, ['tool'], 0)).toEqual(empty('tool'))
-    expect(completeWords(registry, ['tool'], 2)).toEqual(empty())
+    expect((await completeWords(registry, ['tool', 'project', 'r', 'f', '--depth', 'all'], 2)).candidates).toEqual(['r', 'remote'])
+    expect((await completeWords(registry, ['tool', 'project', 'r'], 3)).candidates).toContain('fetch')
+    expect((await completeWords(registry, ['tool'], 0))).toEqual(empty('tool'))
+    expect((await completeWords(registry, ['tool'], 2))).toEqual(empty())
   })
 
-  test('never calls hooks or target handlers, and observes the supplied registry each time', () => {
+  test('never calls hooks or target handlers, and observes the supplied registry each time', async () => {
     const { registry, calls } = fixture()
-    complete(registry, 'project', 'r', 'f', '')
-    complete(registry, 'project', 'some-id', 'inspect', '')
-    complete(registry, 'help', 'project', 'list', '')
+    await complete(registry, 'project', 'r', 'f', '')
+    await complete(registry, 'project', 'some-id', 'inspect', '')
+    await complete(registry, 'help', 'project', 'list', '')
     expect(calls).toEqual([])
-    expect(complete([], 'p').candidates).toEqual([])
-    expect(complete([registry[0]!], 'p').candidates).toEqual(['p', 'project'])
+    expect((await complete([], 'p')).candidates).toEqual([])
+    expect((await complete([registry[0]!], 'p')).candidates).toEqual(['p', 'project'])
   })
 })

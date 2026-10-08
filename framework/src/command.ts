@@ -1,5 +1,5 @@
 import type { Ctx, CommandInfo } from './output.ts'
-import type { OptionSpec } from './cli.ts'
+import type { OptionSpec, ValueCompletion } from './cli.ts'
 import { extractGlobalOptions, flag, parseCommandArgs, PROGRAM, setOutputSink, write, writeErr } from './cli.ts'
 import { GLOBAL_OPTIONS, makeCtx, pullRepeatable, reportFailure } from './output.ts'
 import { errorMessage, OpsError, usageError } from './errors.ts'
@@ -15,6 +15,8 @@ export interface CommandNode {
   source?: string
   options?: OptionSpec[]
   repeatable?: string[]
+  /** Values for this node's :parameter when it is a dynamic child. */
+  completion?: ValueCompletion
   init?: CommandHook
   destroy?: CommandHook
   run?: CommandHandler

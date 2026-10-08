@@ -1,4 +1,4 @@
-import type { OptionSpec } from './cli.ts'
+import type { CompletionContext, OptionSpec } from './cli.ts'
 import { FRAMEWORK_OPTIONS, type CommandNode, type RegisteredCommand } from './command.ts'
 
 export interface CompletionResult {
@@ -12,11 +12,12 @@ function values(prefix: string, candidates: readonly string[] = [], replacementP
   return { kind: 'values', prefix, replacementPrefix, candidates: [...new Set(candidates)].filter((value) => value.startsWith(prefix)).sort() }
 }
 
-function optionValues(option: OptionSpec, prefix: string, replacementPrefix = ''): CompletionResult {
+async function optionValues(option: OptionSpec, ctx: CompletionContext, replacementPrefix = ''): Promise<CompletionResult> {
   if (option.completion === 'file' || option.completion === 'directory') {
-    return { kind: option.completion, prefix, replacementPrefix, candidates: [] }
+    return { kind: option.completion, prefix: ctx.prefix, replacementPrefix, candidates: [] }
   }
-  return values(prefix, option.completion ?? [], replacementPrefix)
+  const candidates = typeof option.completion === 'function' ? await option.completion(ctx) : option.completion ?? []
+  return values(ctx.prefix, candidates, replacementPrefix)
 }
 
 function childNode(child: CommandNode | NonNullable<CommandNode['run']>): CommandNode {
@@ -59,13 +60,18 @@ function optionToken(token: string, options: readonly OptionSpec[]): OptionToken
   return {}
 }
 
-/** Complete metadata only: no registry mutation, command execution, or filesystem discovery. */
-export function completeWords(registry: readonly RegisteredCommand[], words: readonly string[], index: number): CompletionResult {
+/** Resolve declarations/providers only: never execute target handlers or hooks. */
+export async function completeWords(registry: readonly RegisteredCommand[], words: readonly string[], index: number): Promise<CompletionResult> {
   const current = words[index] ?? ''
   if (!Number.isInteger(index) || index < 1 || index > words.length) return values(current)
   const head = words.slice(1, index)
   const config = FRAMEWORK_OPTIONS.find((option) => option.name === 'config')!
   const rootOptions = FRAMEWORK_OPTIONS.filter((option) => option.name === 'help' || option.name === 'config')
+  const params: Record<string, string> = Object.create(null)
+  let configPath: string | undefined
+  const context = (prefix: string): CompletionContext => ({
+    words: words.slice(0, index + 1), index, prefix, configPath, params,
+  })
 
   // The root parser extracts config globally, even when it occurs between a
   // command option and its value. Preserve that precedence before routing.
@@ -81,8 +87,10 @@ export function completeWords(registry: readonly RegisteredCommand[], words: rea
         break
       }
       if (next.startsWith('-')) return values(current)
+      configPath = next
       position += 1
-    } else if (!token.startsWith('--config=')) tokens.push(token)
+    } else if (token.startsWith('--config=')) configPath = token.slice(9)
+    else tokens.push(token)
   }
 
   // Repeatable long options are pulled before parseArgs, and can consume even
@@ -144,30 +152,34 @@ export function completeWords(registry: readonly RegisteredCommand[], words: rea
       ?? entries.find(([name]) => name.startsWith(':'))
     if (!selected) { invalid = true; break }
     node = childNode(selected[1])
+    if (selected[0].startsWith(':')) params[selected[0].slice(1)] = token
     nodes.push(node)
   }
   if (invalid) return values(current)
-  if (configPending) return current.startsWith('-') ? values(current) : optionValues(config, current)
-  if (current.startsWith('--config=')) return optionValues(config, current.slice(9), '--config=')
-  if (repeatPending) return optionValues(repeatPending, current)
-  if (pending) return current.startsWith('-') ? values(current) : optionValues(pending, current)
-
   const inherited = command ? optionsFor(nodes) : rootOptions
+  // Route-local declarations override ancestors; the union still recognizes
+  // descendant flags before their route has been reached.
+  const selectedOption = (option: OptionSpec): OptionSpec => inherited.find((entry) => entry.name === option.name) ?? option
+  if (configPending) return current.startsWith('-') ? values(current) : optionValues(config, context(current))
+  if (current.startsWith('--config=')) return optionValues(config, context(current.slice(9)), '--config=')
+  if (repeatPending) return optionValues(selectedOption(repeatPending), context(current))
+  if (pending) return current.startsWith('-') ? values(current) : optionValues(selectedOption(pending), context(current))
+
   if (command && current.startsWith('--')) {
     const equals = current.indexOf('=')
     const name = current.slice(2, equals === -1 ? undefined : equals)
     if (equals !== -1 && command.repeatable.includes(name)) {
       const option: OptionSpec = { ...union.find((candidate) => candidate.name === name), name, type: 'string' }
-      return optionValues(option, current.slice(equals + 1), current.slice(0, equals + 1))
+      return optionValues(selectedOption(option), context(current.slice(equals + 1)), current.slice(0, equals + 1))
     }
   }
   if (current.startsWith('-') && current !== '-') {
     const parsed = optionToken(current, union)
     if (command && !parsed.invalid && parsed.option?.type === 'string') {
-      if (parsed.prefix !== undefined) return optionValues(parsed.option, parsed.prefix, parsed.replacementPrefix)
+      if (parsed.prefix !== undefined) return optionValues(selectedOption(parsed.option), context(parsed.prefix), parsed.replacementPrefix)
       // A short string option may take its value in this very word; a long
       // option without '=' remains a flag until the next shell word.
-      if (!current.startsWith('--')) return optionValues(parsed.option, '', current)
+      if (!current.startsWith('--')) return optionValues(selectedOption(parsed.option), context(''), current)
     }
     if (current.includes('=') || (!current.startsWith('--') && current.length > 2)) return values(current)
   }
@@ -178,7 +190,12 @@ export function completeWords(registry: readonly RegisteredCommand[], words: rea
     if (!help) candidates.push('help')
   } else if (node?.commands) {
     for (const [name, child] of Object.entries(node.commands)) {
-      if (!name.startsWith(':')) candidates.push(name, ...(childNode(child).aliases ?? []))
+      if (name.startsWith(':')) {
+        const completion = childNode(child).completion
+        if (!current.startsWith('-') && completion) {
+          candidates.push(...(typeof completion === 'function' ? await completion(context(current)) : completion))
+        }
+      } else candidates.push(name, ...(childNode(child).aliases ?? []))
     }
   }
   for (const option of inherited) {

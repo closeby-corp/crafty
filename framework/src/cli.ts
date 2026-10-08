@@ -17,12 +17,25 @@ export class CliError extends Error {
   }
 }
 
+export interface CompletionContext {
+  /** Only words up to and including the cursor; executable is word zero. */
+  words: readonly string[]
+  index: number
+  prefix: string
+  /** Last complete --config/-c before the cursor, if supplied. */
+  configPath: string | undefined
+  params: Readonly<Record<string, string>>
+}
+
+export type CompletionProvider = (ctx: CompletionContext) => readonly string[] | Promise<readonly string[]>
+export type ValueCompletion = readonly string[] | CompletionProvider
+
 export interface OptionSpec {
   name: string
   type: 'boolean' | 'string'
   short?: string
-  /** Explicit value completion; string options otherwise have no inferred values. */
-  completion?: 'file' | 'directory' | readonly string[]
+  /** Lazy client-owned values, explicit enums, or native filesystem completion. */
+  completion?: 'file' | 'directory' | ValueCompletion
 }
 
 export type Values = Record<string, string | string[] | boolean | undefined>

@@ -6,7 +6,8 @@ A Bun command framework with client-owned TypeScript commands. This repository c
 crafty/
 ├── package.json       # private workspace container
 ├── bun.lock           # shared dependency lockfile
-├── framework/         # installable crafty package, version 0.4.0
+├── framework/         # installable crafty package, version 0.5.0
+│   ├── SKILL.md       # packaged command and recipe authoring guidance
 │   ├── src/
 │   └── test/
 └── client/            # optional infrastructure application
@@ -63,7 +64,7 @@ Use your client's CLI name instead of `crafty`, for example `ops completion inst
 
 The installer is available in Crafty 0.4.0 and newer. Manual registration also works: for Bash, add `source <(crafty completion bash)` to `~/.bashrc`; for Zsh, add `source <(crafty completion zsh)` after `compinit` in `~/.zshrc`.
 
-Each Tab request queries the linked client for fresh command metadata. New, edited, and removed command modules appear immediately without re-sourcing, rebuilding, or relinking. Completion covers command names/aliases, nested static routes, inherited flags, explicit enum values, and declared file/directory inputs. It does not infer values for dynamic route parameters or contact infrastructure APIs.
+Each Tab request queries the linked client for fresh command metadata and declared value providers. New, edited, and removed command modules appear immediately without re-sourcing, rebuilding, or relinking. Completion covers command names/aliases, nested routes, inherited flags, explicit enums, declared file/directory inputs, and client-provided configuration-backed option/parameter values. It does not infer configuration schemas or contact infrastructure APIs automatically.
 
 Target handlers and lifecycle hooks do not run during metadata lookup, but command modules are still imported. Keep import-time code free of side effects. See the [framework completion contract](framework/README.md#optional-completion-plugin) for value metadata and registration details.
 
@@ -73,10 +74,12 @@ Target handlers and lifecycle hooks do not run during metadata lookup, but comma
 Only the framework is packaged. Install the versioned GitHub release asset:
 
 ```bash
-bun add https://github.com/closeby-corp/crafty/releases/download/v0.4.0/crafty-0.4.0.tgz
+bun add https://github.com/closeby-corp/crafty/releases/download/v0.5.0/crafty-0.5.0.tgz
 ```
 
 Crafty is not published to npm. The repository root is a private workspace container, not the framework package. See the [framework README](framework/README.md) for the minimal client entrypoint, public API, and command contract. See the [client README](client/README.md) for the existing integrations and configuration.
+
+For agent-assisted command and recipe creation, use [`framework/SKILL.md`](framework/SKILL.md), also shipped as `node_modules/crafty/SKILL.md` and exposed as `crafty/SKILL.md`. It covers client discovery, command contracts, configuration access, optional plugins, and the Markdown recipe format for clients that provide a recipe engine. Packaging does not automatically register the skill with an agent.
 
 ## Development
 
@@ -84,10 +87,18 @@ Crafty is not published to npm. The repository root is a private workspace conta
 bun install --frozen-lockfile
 bun run test          # framework and client suites
 bun run typecheck     # framework and client TypeScript checks
-bun run pack          # framework/crafty-0.4.0.tgz
+bun run pack          # framework/crafty-0.5.0.tgz
 ```
 
-The framework package's allowlist contains only its `src/`; standard package metadata and its README are included. Client commands, assets, and integration dependencies are excluded. The old compiled launcher and source-tree installation layout are removed; clients execute through Bun and their installed framework.
+The framework package's allowlist contains `src/` and `SKILL.md`; standard package metadata and its README are included. Client commands, assets, and integration dependencies are excluded. The old compiled launcher and source-tree installation layout are removed; clients execute through Bun and their installed framework.
+
+## 0.5.0
+
+- Added lazy synchronous/asynchronous completion providers for configuration-backed option values and dynamic route parameters.
+- Providers receive the selected configuration path and captured parameters; inherited options respect route-local value metadata.
+- Included the command/recipe authoring skill in the framework package as `SKILL.md`, exposed as `crafty/SKILL.md`.
+
+Verified: 50 framework tests, both workspace typechecks, CLI queries, actual Bash Tab interactions, and an isolated installed-package consumer exercising skill resolution, configured values, and live configuration refresh.
 
 ## 0.4.0
 

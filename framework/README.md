@@ -2,17 +2,19 @@
 
 Bun routing, argument parsing, help, lifecycle hooks, invocation context, and structured output/errors for client-owned TypeScript commands. Requires Bun >= 1.4.
 
-The `crafty` package contains the framework only. It ships no integration commands, recipes, configuration template, or executable. The optional existing infrastructure application is a sibling workspace in [`../client/`](../client/README.md), not a package dependency.
+The `crafty` package contains the framework and its [authoring skill](SKILL.md). It ships no integration commands, recipes, configuration template, or executable. The repository's optional client workspace is not a package dependency.
 
 ## Install
 
 Crafty is not published to npm. Install the versioned GitHub release asset in your client repository:
 
 ```bash
-bun add https://github.com/closeby-corp/crafty/releases/download/v0.4.0/crafty-0.4.0.tgz
+bun add https://github.com/closeby-corp/crafty/releases/download/v0.5.0/crafty-0.5.0.tgz
 ```
 
 Commit the dependency manifest, `bun.lock`, command files, and client entrypoint. The manifest and lockfile select the installed framework version; Git versions the client commands.
+
+For agent-assisted command and recipe authoring, read `node_modules/crafty/SKILL.md`. The skill ships in the package and is exposed as `crafty/SKILL.md`; packaging does not automatically register it with an agent.
 
 ## Link a client executable
 
@@ -109,9 +111,30 @@ options: [
 ]
 ```
 
-File/directory discovery uses the shell's native completer. String options without completion metadata have no inferred values. Dynamic parameter values and remote resources are not fetched automatically. The global `--config` option completes files, and `--format` completes its supported values.
+File/directory discovery uses the shell's native completer. String options without completion metadata have no inferred values. The global `--config` option completes files, and `--format` completes its supported values.
 
-Target handlers and `init`/`destroy` hooks are not called by metadata lookup. Modules are still imported on each query, so keep import-time code free of side effects. Suggestions are transported as literal NUL-delimited records, not evaluated as shell code. File paths and enum values retain quoting when inserted.
+In Crafty 0.5.0 and newer, use a synchronous or asynchronous `CompletionProvider` for configuration-backed values. Adapt your existing client loader to accept the provider's `configPath` override; the framework does not parse configuration or prescribe its schema:
+
+```ts
+const configuredHosts: CompletionProvider = async ({ configPath }) => {
+  const config = await loadConfig(configPath)
+  return Object.keys(config.hosts)
+}
+
+// An option declared on a parent is inherited by its descendants:
+options: [{ name: 'host', type: 'string', short: 'H', completion: configuredHosts }]
+
+// A dynamic child's completion supplies values for that :parameter:
+commands: {
+  ':host': { completion: configuredHosts, run: inspectHost },
+}
+```
+
+`CompletionContext` contains `configPath` (the last complete `--config`, `--config=`, or `-c` before the cursor), previously captured `params`, the value `prefix`, cursor `index`, and `words` through the cursor, including the executable. Without an explicit config path, the client loader chooses its normal defaults. Pass `configPath` to the loader explicitly: `configPathFromCli()` does not see the target words transported after the query's `--`.
+
+Providers run only for the value being completed, and are awaited on every query. Arrays and provider results are prefix-filtered, deduplicated, and sorted. Separate values, `--host=value`, short attached values, and repeatable options are supported. Route-local option declarations override ancestors. Dynamic values coexist with static commands/aliases; static routes still win when resolving an entered word. No infrastructure API is contacted automatically.
+
+Target handlers and `init`/`destroy` hooks are not called by completion lookup. Modules are still imported on each query, so keep import-time code free of side effects and load configuration inside providers. Provider errors fail the query normally; shell adapters suppress diagnostics and offer no candidates. Return only public identifiers, never credentials; providers must not write to stdout. Suggestions are transported as literal NUL-delimited records, not evaluated as shell code. File paths and configured values retain quoting when inserted.
 
 The `completion query --index <n> -- <words...>` route is the shell adapter's machine-readable endpoint. Words include the executable at index zero; words after the cursor are ignored.
 
@@ -119,6 +142,7 @@ The `completion query --index <n> -- <words...>` route is the shell adapter's ma
 
 - `start({ commandsDir, argv?, program? }): Promise<number>` discovers commands and runs the invocation. `commandsDir` accepts a filesystem path or file URL; `argv` defaults to process arguments and `program` to `crafty`. The caller sets `process.exitCode`.
 - `CommandModule`, `CommandNode`, `CommandHandler`, `CommandHook`, `Ctx`, and `OptionSpec` describe commands and their invocation context.
+- `CompletionContext`, `CompletionProvider`, and `ValueCompletion` describe client-owned lazy value completion.
 - `emitResult`, envelope/table helpers, `flag`, `option`, argument-value helpers, `write`, and `writeErr` provide the existing output contract.
 - `OpsError`, `ConfigError`, `usageError`, error classification, and secret-redaction helpers provide shared diagnostics.
 - `loadCommands`, `run`, `prepareCommand`, `runCommand`, registry helpers, `configPathFromCli`, and `setOutputSink` support client-owned composition, including recipes.
@@ -129,7 +153,7 @@ The framework recognizes `--config`; the client decides how that path is interpr
 
 ## Development and packaging
 
-From the repository root, `bun install --frozen-lockfile` installs the framework and included client workspaces. The client uses `crafty: workspace:*`; external clients use the released package instead.
+From the repository root, `bun install --frozen-lockfile` installs the framework and client workspaces. The client uses `crafty: workspace:*`; external clients use the released package instead.
 
 ```bash
 # From framework/
@@ -138,7 +162,13 @@ bun run typecheck
 bun pm pack
 ```
 
-The package allowlist includes only `src/`; the standard manifest and README are also included. It excludes the client and all integrations. No compiled binary or adjacent-source-tree layout is required.
+The package allowlist includes `src/` and `SKILL.md`; the standard manifest and README are also included. It excludes the client workspace and every integration. No compiled binary or adjacent-source-tree layout is required.
+
+## 0.5.0 changes
+
+Added lazy synchronous/asynchronous value providers for inherited string options and dynamic route parameters, including selected configuration paths and captured parameters. Verified with 50 framework tests, 8 example-client tests, both typechecks, direct CLI queries, and interactive Bash Tab completion against an isolated configuration.
+
+The client command/recipe authoring skill now ships as `SKILL.md` in the package, with installed-package links and guidance for configuration-backed completion.
 
 ## 0.4.0 changes
 

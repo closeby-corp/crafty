@@ -12,6 +12,9 @@ export {
   setOutputSink,
   usageText,
   type OptionSpec,
+  type CompletionContext,
+  type CompletionProvider,
+  type ValueCompletion,
   type ParsedArgs,
   type Values,
 } from './cli.ts'
