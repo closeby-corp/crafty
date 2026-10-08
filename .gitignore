@@ -1,0 +1,3 @@
+# `bun run compile` writes the standalone binary here.
+dist/
+node_modules/
