@@ -1,0 +1,15 @@
+{
+  "name": "crafty-client",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": { "crafty": "./cli.ts" },
+  "engines": { "bun": ">=1.4.0" },
+  "scripts": {
+    "cli": "bun run cli.ts",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": { "crafty": "workspace:*" },
+  "devDependencies": { "@types/bun": "latest", "typescript": "^5.9.0" }
+}

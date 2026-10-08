@@ -1,3 +1,4 @@
-# `bun run compile` writes the standalone binary here.
+# Local dependencies and generated artifacts.
 dist/
 node_modules/
+*.tgz

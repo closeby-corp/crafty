@@ -1,0 +1,15 @@
+{
+  "name": "crafty",
+  "version": "0.2.0",
+  "description": "Bun command framework for client-owned TypeScript commands",
+  "repository": { "type": "git", "url": "git+https://github.com/closeby-corp/crafty.git", "directory": "framework" },
+  "type": "module",
+  "exports": { ".": "./src/index.ts" },
+  "files": ["src"],
+  "engines": { "bun": ">=1.4.0" },
+  "scripts": {
+    "test": "bun test ./test",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": { "@types/bun": "latest", "typescript": "^5.9.0" }
+}
