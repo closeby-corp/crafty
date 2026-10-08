@@ -47,13 +47,13 @@ Ensure Bun's global bin directory is on PATH. `bun unlink` unregisters this clie
 
 This client enables the optional `crafty/plugins/completion` module through `commands/completion.ts`.
 
-Bash 4+: add `source <(crafty completion bash)` to `~/.bashrc`.
+Run `crafty completion install` after linking the client, then open a new shell. It detects Bash/Zsh from `$SHELL`; use `--shell bash` or `--shell zsh` to override. Bash requires version 4 or newer.
 
-Zsh: add `source <(crafty completion zsh)` to `~/.zshrc` after your existing `compinit` initialization. If completion is not initialized, run `autoload -Uz compinit; compinit` first.
+Registration is appended to `~/.bashrc` or `$ZDOTDIR/.zshrc` (falling back to `$HOME/.zshrc` only when `ZDOTDIR` is unset). Repeat installs do not duplicate blocks. Existing contents, permissions, and symlinks are preserved; Zsh initializes `compinit` if needed. For differently named clients, use that executable's name, for example `ops completion install`.
 
 Suggestions query this client's current command metadata on each Tab press. Adding, editing, or removing command modules does not require regenerating scripts or restarting the shell. Root/nested commands, aliases, flags, format values, and explicitly marked local file/directory inputs are supported. Infrastructure values are not fetched automatically, and target handlers/hooks are not executed.
 
-The scripts are printed to stdout; Crafty does not modify startup files. Remove `commands/completion.ts` if this client should not expose completion.
+Only the explicit install command modifies startup files. Remove its marked block to unregister, and remove `commands/completion.ts` if the client should not expose completion. Manual registration remains supported: `source <(crafty completion bash)` in `~/.bashrc`, or `source <(crafty completion zsh)` after `compinit` in `~/.zshrc`.
 
 
 ## Command modules

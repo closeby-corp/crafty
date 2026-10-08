@@ -1,12 +1,15 @@
+import { homedir } from 'node:os'
+import { basename } from 'node:path'
 import { commands, option, write } from '../cli.ts'
 import type { CommandModule } from '../command.ts'
 import { completeWords } from '../completion.ts'
 import { usageError } from '../errors.ts'
-import type { Ctx } from '../output.ts'
-import { bashCompletion, zshCompletion } from './completion-shells.ts'
+import { emitResult, type Ctx } from '../output.ts'
+import { bashCompletion, quote, zshCompletion } from './completion-shells.ts'
+import { installCompletion } from './completion-install.ts'
 
-function programIdentity(ctx: Ctx, shell: 'bash' | 'zsh'): string {
-  const suffix = ` completion ${shell}`
+function programIdentity(ctx: Ctx, action: 'bash' | 'zsh' | 'install'): string {
+  const suffix = ` completion ${action}`
   if (!ctx.path.endsWith(suffix)) throw usageError('completion must be registered as "completion"')
   const program = ctx.path.slice(0, -suffix.length)
   if (!program || program.includes('\0')) throw usageError('completion requires an executable name')
@@ -15,8 +18,25 @@ function programIdentity(ctx: Ctx, shell: 'bash' | 'zsh'): string {
 
 const completion: CommandModule = {
   name: 'completion',
-  summary: 'Generate optional shell completion or query current command metadata',
+  summary: 'Generate, install, or query optional dynamic shell completion',
   commands: {
+    install: {
+      summary: 'Install dynamic completion in Bash/Zsh startup files; defaults to $SHELL',
+      options: [{ name: 'shell', type: 'string', completion: ['bash', 'zsh'] }],
+      async run(ctx) {
+        const result = await installCompletion({
+          program: programIdentity(ctx, 'install'),
+          shell: option(ctx.values, 'shell') ?? basename(process.env.SHELL ?? ''),
+          home: homedir(),
+          zdotdir: process.env.ZDOTDIR,
+        })
+        if (ctx.json || ctx.format !== 'auto') {
+          emitResult(ctx, result)
+        } else {
+          write(`${result.changed ? 'Installed' : 'Already installed'} ${result.shell} completion in ${quote(result.path)}.\nOpen a new shell to activate completions.\n`)
+        }
+      },
+    },
     bash: {
       summary: 'Print a Bash registration script for this executable',
       run(ctx) {

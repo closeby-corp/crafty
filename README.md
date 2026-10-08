@@ -6,7 +6,7 @@ A Bun command framework with client-owned TypeScript commands. This repository c
 crafty/
 ├── package.json       # private workspace container
 ├── bun.lock           # shared dependency lockfile
-├── framework/         # installable crafty package, version 0.3.0
+├── framework/         # installable crafty package, version 0.4.0
 │   ├── src/
 │   └── test/
 └── client/            # optional infrastructure application
@@ -19,6 +19,8 @@ crafty/
 ```
 
 Requires Bun >= 1.4. The framework supplies command routing, arguments, help, lifecycle hooks, context, and structured output/errors. It ships no integration commands or executable. The optional client owns those commands and imports the framework through its installed `crafty` dependency.
+
+The UQ operations client now also runs independently in `~/uq/uq-infra-support/infra/services/ops-cli`, with the executable name `ops`. Its command files are owned by that repository, and its framework dependency is a pinned package artifact—not a workspace link to this checkout. The included `client/` remains unchanged for now as the existing infrastructure application and compatibility suite.
 
 ## Run and link the included client
 
@@ -47,21 +49,19 @@ The included client enables the optional standard plugin in `client/commands/com
 export { default } from 'crafty/plugins/completion'
 ```
 
-For Bash 4 or newer, add this line to `~/.bashrc`:
+Install registration once and then open a new shell:
 
 ```bash
-source <(crafty completion bash)
+crafty completion install                # detect Bash/Zsh from $SHELL
+crafty completion install --shell bash   # explicitly choose Bash 4+
+crafty completion install --shell zsh
 ```
 
-For Zsh, source the adapter after completion initialization in `~/.zshrc`:
+The installer appends a per-executable block to `~/.bashrc` or `${ZDOTDIR-$HOME}/.zshrc` (Zsh uses `$HOME` only when `ZDOTDIR` is unset). Repeating the command does not add duplicate blocks. Existing contents, permissions, and startup-file symlinks are preserved. Zsh initializes `compinit` only if needed. Missing executables are skipped at startup.
 
-```zsh
-autoload -Uz compinit
-compinit
-source <(crafty completion zsh)
-```
+Use your client's CLI name instead of `crafty`, for example `ops completion install`. Multiple executable registrations coexist. Only `completion install` edits startup files; `completion bash` and `completion zsh` still print adapters for manual sourcing. To remove registration, delete that executable's marked block from the startup file.
 
-If your Zsh setup already runs `compinit`, keep that initialization and add only the source line after it. Crafty prints registration scripts; it never edits shell startup files.
+The installer is available in Crafty 0.4.0 and newer. Manual registration also works: for Bash, add `source <(crafty completion bash)` to `~/.bashrc`; for Zsh, add `source <(crafty completion zsh)` after `compinit` in `~/.zshrc`.
 
 Each Tab request queries the linked client for fresh command metadata. New, edited, and removed command modules appear immediately without re-sourcing, rebuilding, or relinking. Completion covers command names/aliases, nested static routes, inherited flags, explicit enum values, and declared file/directory inputs. It does not infer values for dynamic route parameters or contact infrastructure APIs.
 
@@ -73,7 +73,7 @@ Target handlers and lifecycle hooks do not run during metadata lookup, but comma
 Only the framework is packaged. Install the versioned GitHub release asset:
 
 ```bash
-bun add https://github.com/closeby-corp/crafty/releases/download/v0.3.0/crafty-0.3.0.tgz
+bun add https://github.com/closeby-corp/crafty/releases/download/v0.4.0/crafty-0.4.0.tgz
 ```
 
 Crafty is not published to npm. The repository root is a private workspace container, not the framework package. See the [framework README](framework/README.md) for the minimal client entrypoint, public API, and command contract. See the [client README](client/README.md) for the existing integrations and configuration.
@@ -84,10 +84,18 @@ Crafty is not published to npm. The repository root is a private workspace conta
 bun install --frozen-lockfile
 bun run test          # framework and client suites
 bun run typecheck     # framework and client TypeScript checks
-bun run pack          # framework/crafty-0.3.0.tgz
+bun run pack          # framework/crafty-0.4.0.tgz
 ```
 
 The framework package's allowlist contains only its `src/`; standard package metadata and its README are included. Client commands, assets, and integration dependencies are excluded. The old compiled launcher and source-tree installation layout are removed; clients execute through Bun and their installed framework.
+
+## 0.4.0
+
+- Added explicit `completion install` to the existing optional completion plugin: Bash/Zsh detection, `--shell`, idempotent per-CLI startup registration, and `ZDOTDIR` support.
+- Preserved existing startup contents, permissions, and symlinks; edited/incomplete managed blocks are rejected rather than overwritten.
+- Released the completion installer as a versioned GitHub package asset for independent clients, including UQ's `ops` CLI.
+
+Verified: 45 framework tests, 367 client tests, both typechecks, and fresh interactive Bash/Zsh shells using isolated startup files. Actual Tab interactions exercised multiple CLI names and newly added commands without reinstalling. The user's startup files were not modified.
 
 ## 0.3.0
 

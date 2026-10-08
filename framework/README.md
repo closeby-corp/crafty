@@ -9,7 +9,7 @@ The `crafty` package contains the framework only. It ships no integration comman
 Crafty is not published to npm. Install the versioned GitHub release asset in your client repository:
 
 ```bash
-bun add https://github.com/closeby-corp/crafty/releases/download/v0.3.0/crafty-0.3.0.tgz
+bun add https://github.com/closeby-corp/crafty/releases/download/v0.4.0/crafty-0.4.0.tgz
 ```
 
 Commit the dependency manifest, `bun.lock`, command files, and client entrypoint. The manifest and lockfile select the installed framework version; Git versions the client commands.
@@ -81,7 +81,21 @@ export { default } from 'crafty/plugins/completion'
 
 The module is shipped with the framework but not automatically registered. Remove the client module to disable the command.
 
-For Bash 4+, source `source <(crafty completion bash)` from `~/.bashrc`. For Zsh, source `source <(crafty completion zsh)` from `~/.zshrc` after `compinit` has run. Use your client's executable name instead of `crafty` when it has a different `bin` name and matching `start({ program })`. Script generation never writes startup files.
+Use your client's executable name instead of `crafty` when it has a different `bin` name and matching `start({ program })`.
+
+With Crafty 0.4.0 or newer, install dynamic registration with:
+
+```bash
+crafty completion install               # detect the login shell from $SHELL
+crafty completion install --shell bash  # Bash 4+
+crafty completion install --shell zsh
+```
+
+Open a new shell after installation. Bash registration is appended to `$HOME/.bashrc`; Zsh uses `$ZDOTDIR/.zshrc`, or `$HOME/.zshrc` when `ZDOTDIR` is unset. The marked block checks that the executable is on `PATH`, then loads its adapter. Zsh runs `compinit` only when `compdef` is not already available.
+
+Each executable has a separate block, so distinct client names coexist. Repeat installs leave the file unchanged. Existing startup bytes, permissions, and symlinks are preserved; new startup files use mode `0600`. Installation rejects edited/incomplete managed blocks; remove that block before reinstalling. To uninstall registration, remove its marked block. `--json` reports `shell`, `path`, and `changed` in the normal result envelope.
+
+For manual registration, add `source <(crafty completion bash)` to `~/.bashrc` (Bash 4+), or `source <(crafty completion zsh)` after `compinit` in `~/.zshrc`. These generation commands never write startup files; only explicit `completion install` does.
 
 The shell adapter queries the executable on every Tab request. Command/alias changes are visible without re-sourcing or relinking. The query resolves nested static routes and consumed dynamic parameters, suggests inherited flags, and handles separate/attached option values. `help` routing is supported; completion stops at a standalone `--`.
 
@@ -125,6 +139,10 @@ bun pm pack
 ```
 
 The package allowlist includes only `src/`; the standard manifest and README are also included. It excludes the client and all integrations. No compiled binary or adjacent-source-tree layout is required.
+
+## 0.4.0 changes
+
+Added `completion install` to the optional plugin. Registration is explicit, per-executable, idempotent, and honors Zsh's `ZDOTDIR`. Existing startup files are appended to rather than replaced, including symlinked dotfiles. Verified with 45 framework tests, both workspace typechecks, and actual new-shell Bash/Zsh Tab interactions in isolated clients.
 
 ## 0.3.0 changes
 

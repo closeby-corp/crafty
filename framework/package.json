@@ -1,6 +1,6 @@
 {
   "name": "crafty",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Bun command framework for client-owned TypeScript commands",
   "repository": { "type": "git", "url": "git+https://github.com/closeby-corp/crafty.git", "directory": "framework" },
   "type": "module",

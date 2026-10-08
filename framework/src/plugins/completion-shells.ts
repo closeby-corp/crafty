@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 
-function quote(value: string): string {
+export function quote(value: string): string {
   return `'${value.replaceAll("'", "'\\''")}'`
 }
 
