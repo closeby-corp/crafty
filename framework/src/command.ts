@@ -32,10 +32,10 @@ export interface RegisteredCommand {
   repeatable: string[]
 }
 
-const FRAMEWORK_OPTIONS: OptionSpec[] = [
+export const FRAMEWORK_OPTIONS: OptionSpec[] = [
   ...GLOBAL_OPTIONS,
   { name: 'help', type: 'boolean', short: 'h' },
-  { name: 'config', type: 'string', short: 'c' },
+  { name: 'config', type: 'string', short: 'c', completion: 'file' },
 ]
 
 function plainObject(value: unknown): boolean {

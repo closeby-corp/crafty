@@ -21,6 +21,8 @@ export interface OptionSpec {
   name: string
   type: 'boolean' | 'string'
   short?: string
+  /** Explicit value completion; string options otherwise have no inferred values. */
+  completion?: 'file' | 'directory' | readonly string[]
 }
 
 export type Values = Record<string, string | string[] | boolean | undefined>

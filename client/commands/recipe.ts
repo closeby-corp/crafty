@@ -48,7 +48,7 @@ const listVerb: CommandNode = {
     '  -h, --help            Show this message',
   ],
   repeatable: ['recipes-dir'],
-  options: [{ name: 'recipes-dir', type: 'string' }],
+  options: [{ name: 'recipes-dir', type: 'string', completion: 'directory' }],
   run: async (ctx) => {
     const recipes = discoverRecipes(dirsFrom(ctx))
     const rows = recipes.map((recipe) => ({
@@ -77,7 +77,7 @@ const showVerb: CommandNode = {
     '  -h, --help            Show this message',
   ],
   repeatable: ['recipes-dir'],
-  options: [{ name: 'recipes-dir', type: 'string' }],
+  options: [{ name: 'recipes-dir', type: 'string', completion: 'directory' }],
   run: async (ctx) => {
     const recipe = findRecipe(recipeName(ctx), dirsFrom(ctx))
     if (ctx.json || ctx.format !== 'auto') {
@@ -136,7 +136,7 @@ const runVerb: CommandNode = {
   repeatable: ['param', 'recipes-dir'],
   options: [
     { name: 'param', type: 'string' },
-    { name: 'recipes-dir', type: 'string' },
+    { name: 'recipes-dir', type: 'string', completion: 'directory' },
     { name: 'dry-run', type: 'boolean' },
     { name: 'yes', type: 'boolean' },
   ],

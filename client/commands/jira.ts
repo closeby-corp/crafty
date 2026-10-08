@@ -470,7 +470,7 @@ usage: [
 ],
 options: [
   { name: 'body', type: 'string' },
-  { name: 'body-file', type: 'string' },
+  { name: 'body-file', type: 'string', completion: 'file' },
   { name: 'yes', type: 'boolean' },
   { name: 'dry-run', type: 'boolean' },
 ],

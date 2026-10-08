@@ -43,6 +43,19 @@ The client entrypoint imports its locally installed Crafty dependency and select
 The linked executable works independently of the invocation's working directory.
 Ensure Bun's global bin directory is on PATH. `bun unlink` unregisters this client.
 
+## Shell completion
+
+This client enables the optional `crafty/plugins/completion` module through `commands/completion.ts`.
+
+Bash 4+: add `source <(crafty completion bash)` to `~/.bashrc`.
+
+Zsh: add `source <(crafty completion zsh)` to `~/.zshrc` after your existing `compinit` initialization. If completion is not initialized, run `autoload -Uz compinit; compinit` first.
+
+Suggestions query this client's current command metadata on each Tab press. Adding, editing, or removing command modules does not require regenerating scripts or restarting the shell. Root/nested commands, aliases, flags, format values, and explicitly marked local file/directory inputs are supported. Infrastructure values are not fetched automatically, and target handlers/hooks are not executed.
+
+The scripts are printed to stdout; Crafty does not modify startup files. Remove `commands/completion.ts` if this client should not expose completion.
+
+
 ## Command modules
 
 At each launch, Crafty imports direct regular `.ts` files in this client's `commands/`, in filename order.
@@ -639,3 +652,5 @@ Verified on Linux x64 with Bun 1.4.2 after the framework/client extraction:
 
 Linking and config-write smoke checks used temporary locations. Live infrastructure APIs were not
 re-probed during this extraction; the service observations above predate it.
+
+Completion was additionally verified with framework 0.3.0: 39 framework tests and 367 client tests passed, both typechecks passed, and actual Bash/Zsh Tab interactions covered aliases, routes, flags, enum values, paths with spaces, and live command changes. All shell links and fixtures used isolated temporary locations.

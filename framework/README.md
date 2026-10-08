@@ -9,7 +9,7 @@ The `crafty` package contains the framework only. It ships no integration comman
 Crafty is not published to npm. Install the versioned GitHub release asset in your client repository:
 
 ```bash
-bun add https://github.com/closeby-corp/crafty/releases/download/v0.2.0/crafty-0.2.0.tgz
+bun add https://github.com/closeby-corp/crafty/releases/download/v0.3.0/crafty-0.3.0.tgz
 ```
 
 Commit the dependency manifest, `bun.lock`, command files, and client entrypoint. The manifest and lockfile select the installed framework version; Git versions the client commands.
@@ -71,6 +71,36 @@ A node has either `run` or nonempty `commands`. Function children are leaf-handl
 
 Handlers return nothing for exit 0, or an integer in 0–255. Return values are not serialized; use output helpers. JSON output commits only after successful teardown. A primary failure or explicit nonzero status takes precedence over cleanup failures.
 
+## Optional completion plugin
+
+Create `commands/completion.ts` in the client:
+
+```ts
+export { default } from 'crafty/plugins/completion'
+```
+
+The module is shipped with the framework but not automatically registered. Remove the client module to disable the command.
+
+For Bash 4+, source `source <(crafty completion bash)` from `~/.bashrc`. For Zsh, source `source <(crafty completion zsh)` from `~/.zshrc` after `compinit` has run. Use your client's executable name instead of `crafty` when it has a different `bin` name and matching `start({ program })`. Script generation never writes startup files.
+
+The shell adapter queries the executable on every Tab request. Command/alias changes are visible without re-sourcing or relinking. The query resolves nested static routes and consumed dynamic parameters, suggests inherited flags, and handles separate/attached option values. `help` routing is supported; completion stops at a standalone `--`.
+
+Declare option values explicitly:
+
+```ts
+options: [
+  { name: 'mode', type: 'string', completion: ['fast', 'safe'] },
+  { name: 'input', type: 'string', completion: 'file' },
+  { name: 'directory', type: 'string', completion: 'directory' },
+]
+```
+
+File/directory discovery uses the shell's native completer. String options without completion metadata have no inferred values. Dynamic parameter values and remote resources are not fetched automatically. The global `--config` option completes files, and `--format` completes its supported values.
+
+Target handlers and `init`/`destroy` hooks are not called by metadata lookup. Modules are still imported on each query, so keep import-time code free of side effects. Suggestions are transported as literal NUL-delimited records, not evaluated as shell code. File paths and enum values retain quoting when inserted.
+
+The `completion query --index <n> -- <words...>` route is the shell adapter's machine-readable endpoint. Words include the executable at index zero; words after the cursor are ignored.
+
 ## Public API
 
 - `start({ commandsDir, argv?, program? }): Promise<number>` discovers commands and runs the invocation. `commandsDir` accepts a filesystem path or file URL; `argv` defaults to process arguments and `program` to `crafty`. The caller sets `process.exitCode`.
@@ -95,6 +125,10 @@ bun pm pack
 ```
 
 The package allowlist includes only `src/`; the standard manifest and README are also included. It excludes the client and all integrations. No compiled binary or adjacent-source-tree layout is required.
+
+## 0.3.0 changes
+
+Added the optional completion plugin and explicit enum/file/directory option metadata. Dynamic shell registration is verified with actual Tab interactions in Bash 5.2 and Zsh 5.9, including live command changes and literal insertion of shell metacharacters. The Bash adapter requires version 4 or newer.
 
 ## 0.2.0 changes
 

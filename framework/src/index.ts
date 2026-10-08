@@ -15,7 +15,15 @@ export {
   type ParsedArgs,
   type Values,
 } from './cli.ts'
-export * from './command.ts'
+export {
+  prepareCommand,
+  runCommand,
+  type CommandHandler,
+  type CommandHook,
+  type CommandModule,
+  type CommandNode,
+  type RegisteredCommand,
+} from './command.ts'
 export * from './output.ts'
 export * from './errors.ts'
 export * from './log.ts'

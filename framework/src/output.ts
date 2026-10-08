@@ -12,7 +12,7 @@ export { flag, option, write, writeErr } from './cli.ts'
 /** Accepted by every command, on top of `-c/--config` which the parser strips. */
 export const GLOBAL_OPTIONS: OptionSpec[] = [
   { name: 'json', type: 'boolean' },
-  { name: 'format', type: 'string' },
+  { name: 'format', type: 'string', completion: ['json', 'plain', 'table', 'csv'] },
   { name: 'no-color', type: 'boolean' },
   { name: 'verbose', type: 'boolean', short: 'v' },
 ]

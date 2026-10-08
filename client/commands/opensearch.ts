@@ -368,7 +368,7 @@ const queryVerb: CommandNode = {
     { name: 'level', type: 'string' },
     { name: 'level-field', type: 'string' },
     { name: 'text', type: 'string' },
-    { name: 'dsl-file', type: 'string' },
+    { name: 'dsl-file', type: 'string', completion: 'file' },
     { name: 'since', type: 'string' },
     { name: 'until', type: 'string' },
     { name: 'fields', type: 'string' },

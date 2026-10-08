@@ -472,7 +472,7 @@ const dbCommand = {
   usage: USAGE,
   source: 'db',
   options: [
-    { name: 'file', type: 'string' },
+    { name: 'file', type: 'string', completion: 'file' },
     { name: 'pattern', type: 'string' },
     { name: 'limit', type: 'string' },
     { name: 'timeout', type: 'string' },

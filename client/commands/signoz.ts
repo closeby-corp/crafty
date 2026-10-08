@@ -228,7 +228,7 @@ const queryVerb: CommandNode = {
     '  --json           Print the envelope',
     '  -h, --help       Show this message',
   ],
-  options: [{ name: 'sql', type: 'string' }, { name: 'file', type: 'string' }, targetOption],
+  options: [{ name: 'sql', type: 'string' }, { name: 'file', type: 'string', completion: 'file' }, targetOption],
   run: async (ctx) => {
     const target = signozTarget(ctx)
     const inline = option(ctx.values, 'sql')
