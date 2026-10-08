@@ -122,6 +122,8 @@ Add enum, file, directory, or lazy provider metadata to relevant string options.
 
 Providers run lazily for the requested value, without target hooks or handlers. Return only public identifiers, never secrets, and do not write stdout. Dynamic route values are not fetched automatically. Keep import-time code free of filesystem writes, network calls, credential reads, and resource acquisition: completion queries import all command modules.
 
+Since Crafty 0.5.1, completion does not suggest flag names, including after a dash prefix. It still suggests commands, aliases, configured route identifiers, and declared values for options the user types explicitly.
+
 `<cli> completion install --shell bash|zsh` explicitly modifies the user's shell startup file. Do not run installation as part of command development; use an isolated home for installer verification.
 
 ## Author recipes only where the client supports them

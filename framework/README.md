@@ -9,7 +9,7 @@ The `crafty` package contains the framework and its [authoring skill](SKILL.md).
 Crafty is not published to npm. Install the versioned GitHub release asset in your client repository:
 
 ```bash
-bun add https://github.com/closeby-corp/crafty/releases/download/v0.5.0/crafty-0.5.0.tgz
+bun add https://github.com/closeby-corp/crafty/releases/download/v0.5.1/crafty-0.5.1.tgz
 ```
 
 Commit the dependency manifest, `bun.lock`, command files, and client entrypoint. The manifest and lockfile select the installed framework version; Git versions the client commands.
@@ -99,7 +99,7 @@ Each executable has a separate block, so distinct client names coexist. Repeat i
 
 For manual registration, add `source <(crafty completion bash)` to `~/.bashrc` (Bash 4+), or `source <(crafty completion zsh)` after `compinit` in `~/.zshrc`. These generation commands never write startup files; only explicit `completion install` does.
 
-The shell adapter queries the executable on every Tab request. Command/alias changes are visible without re-sourcing or relinking. The query resolves nested static routes and consumed dynamic parameters, suggests inherited flags, and handles separate/attached option values. `help` routing is supported; completion stops at a standalone `--`.
+The shell adapter queries the executable on every Tab request. Command/alias changes are visible without re-sourcing or relinking. The query resolves nested static routes and consumed dynamic parameters, and handles separate/attached option values. Flag names are never suggested, even after typing a dash prefix; type an option explicitly to complete its declared values. `help` routing is supported; completion stops at a standalone `--`.
 
 Declare option values explicitly:
 
@@ -163,6 +163,10 @@ bun pm pack
 ```
 
 The package allowlist includes `src/` and `SKILL.md`; the standard manifest and README are also included. It excludes the client workspace and every integration. No compiled binary or adjacent-source-tree layout is required.
+
+## 0.5.1 changes
+
+Removed flag-name suggestions from completion menus. Commands, aliases, configured route identifiers, and values for explicitly typed options remain supported. Verified with the framework and example-client suites, both typechecks, direct CLI queries, and actual Bash Tab interactions showing no flags.
 
 ## 0.5.0 changes
 

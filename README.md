@@ -6,7 +6,7 @@ A Bun command framework with client-owned TypeScript commands. This repository c
 crafty/
 ├── package.json       # private workspace container
 ├── bun.lock           # shared dependency lockfile
-├── framework/         # installable crafty package, version 0.5.0
+├── framework/         # installable crafty package, version 0.5.1
 │   ├── SKILL.md       # packaged command and recipe authoring guidance
 │   ├── src/
 │   └── test/
@@ -64,7 +64,7 @@ Use your client's CLI name instead of `crafty`, for example `ops completion inst
 
 The installer is available in Crafty 0.4.0 and newer. Manual registration also works: for Bash, add `source <(crafty completion bash)` to `~/.bashrc`; for Zsh, add `source <(crafty completion zsh)` after `compinit` in `~/.zshrc`.
 
-Each Tab request queries the linked client for fresh command metadata and declared value providers. New, edited, and removed command modules appear immediately without re-sourcing, rebuilding, or relinking. Completion covers command names/aliases, nested routes, inherited flags, explicit enums, declared file/directory inputs, and client-provided configuration-backed option/parameter values. It does not infer configuration schemas or contact infrastructure APIs automatically.
+Each Tab request queries the linked client for fresh command metadata and declared value providers. New, edited, and removed command modules appear immediately without re-sourcing, rebuilding, or relinking. Completion covers command names/aliases, nested routes, explicit enums, declared file/directory inputs, and client-provided configuration-backed option/parameter values. Flag names are not suggested, even after a dash prefix; values still complete for options typed explicitly. It does not infer configuration schemas or contact infrastructure APIs automatically.
 
 Target handlers and lifecycle hooks do not run during metadata lookup, but command modules are still imported. Keep import-time code free of side effects. See the [framework completion contract](framework/README.md#optional-completion-plugin) for value metadata and registration details.
 
@@ -74,7 +74,7 @@ Target handlers and lifecycle hooks do not run during metadata lookup, but comma
 Only the framework is packaged. Install the versioned GitHub release asset:
 
 ```bash
-bun add https://github.com/closeby-corp/crafty/releases/download/v0.5.0/crafty-0.5.0.tgz
+bun add https://github.com/closeby-corp/crafty/releases/download/v0.5.1/crafty-0.5.1.tgz
 ```
 
 Crafty is not published to npm. The repository root is a private workspace container, not the framework package. See the [framework README](framework/README.md) for the minimal client entrypoint, public API, and command contract. See the [client README](client/README.md) for the existing integrations and configuration.
@@ -87,10 +87,17 @@ For agent-assisted command and recipe creation, use [`framework/SKILL.md`](frame
 bun install --frozen-lockfile
 bun run test          # framework and client suites
 bun run typecheck     # framework and client TypeScript checks
-bun run pack          # framework/crafty-0.5.0.tgz
+bun run pack          # framework/crafty-0.5.1.tgz
 ```
 
 The framework package's allowlist contains `src/` and `SKILL.md`; standard package metadata and its README are included. Client commands, assets, and integration dependencies are excluded. The old compiled launcher and source-tree installation layout are removed; clients execute through Bun and their installed framework.
+
+## 0.5.1
+
+- Removed flag-name suggestions, including after a dash prefix, while preserving commands, configured route identifiers, and values for explicitly typed options.
+- Updated the packaged skill to describe flag-free completion.
+
+Verified: framework and client behavioral suites, both typechecks, CLI queries, and actual Bash Tab interactions with no flag suggestions.
 
 ## 0.5.0
 

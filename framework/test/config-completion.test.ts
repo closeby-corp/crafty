@@ -68,10 +68,12 @@ describe('configuration-backed completion', () => {
   test('completes configured route identifiers and scopes descendants to captured parameters', async () => {
     const { dir, registry, calls } = await fixture()
     try {
+      expect((await completeWords(registry, ['tool', 'd', ''], 2)).candidates).toEqual(['list', 'production', 'staging'])
+      expect((await completeWords(registry, ['tool', 'd', 'staging', ''], 3)).candidates).toEqual(['preview'])
       expect((await completeWords(registry, ['tool', 'd', 'sta'], 2)).candidates).toEqual(['staging'])
       expect((await completeWords(registry, ['tool', 'd', 'staging', 'pre'], 3)).candidates).toEqual(['preview'])
       expect((await completeWords(registry, ['tool', 'd', 'list', '--host', 'web'], 4)).candidates).toEqual(['web one', 'web two'])
-      expect(calls).toEqual(['environments', 'hosts', 'hosts'])
+      expect(calls).toEqual(['environments', 'hosts', 'environments', 'hosts', 'hosts'])
     } finally { await rm(dir, { recursive: true, force: true }) }
   })
 
@@ -79,8 +81,8 @@ describe('configuration-backed completion', () => {
     const { dir, path, registry, calls } = await fixture()
     try {
       await rm(path)
-      expect((await completeWords(registry, ['tool', 'deploy', '--ho'], 2)).candidates).toEqual(['--host'])
-      expect((await completeWords(registry, ['tool', 'deploy', 'list', '--h'], 3)).candidates).toEqual(['--help', '--host'])
+      expect((await completeWords(registry, ['tool', 'deploy', '--ho'], 2)).candidates).toEqual([])
+      expect((await completeWords(registry, ['tool', 'deploy', 'list', '--h'], 3)).candidates).toEqual([])
       expect((await completeWords(registry, ['tool', 'missing', ''], 2)).candidates).toEqual([])
       expect((await completeWords(registry, ['tool', 'deploy', '--', ''], 3)).candidates).toEqual([])
       expect(calls).toEqual([])

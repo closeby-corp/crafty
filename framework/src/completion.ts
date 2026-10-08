@@ -198,9 +198,5 @@ export async function completeWords(registry: readonly RegisteredCommand[], word
       } else candidates.push(name, ...(childNode(child).aliases ?? []))
     }
   }
-  for (const option of inherited) {
-    candidates.push(`--${option.name}`)
-    if (option.short) candidates.push(`-${option.short}`)
-  }
   return values(current, candidates)
 }
