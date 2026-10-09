@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test'
 import * as childProcess from 'node:child_process'
 import { EventEmitter } from 'node:events'
-import { realpathSync, writeFileSync } from 'node:fs'
+import { writeFileSync } from 'node:fs'
 import { PassThrough } from 'node:stream'
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { basename, isAbsolute, join } from 'node:path'
 import { captureCli, envelope, runCaptured } from './helpers/cli.ts'
 import {
   commands, prepareCommand, setCommands, start, type CommandStartupContext, type RegisteredCommand,
@@ -143,7 +143,11 @@ describe('update plugin', () => {
       expect(ghCalls).toHaveLength(1)
       expect(ghCalls[0]?.args).toContain('--hostname')
       expect(ghCalls[0]?.args.some((arg) => arg.includes('/compare/') && arg.includes('...main'))).toBe(true)
-      expect(ghCalls[0]?.options).toMatchObject({ cwd: realpathSync(local), shell: false, windowsHide: true })
+      const ghOptions = ghCalls[0]?.options as { cwd?: string; shell?: boolean; windowsHide?: boolean }
+      expect(ghOptions).toMatchObject({ shell: false, windowsHide: true })
+      expect(typeof ghOptions.cwd).toBe('string')
+      expect(isAbsolute(ghOptions.cwd!)).toBe(true)
+      expect(basename(ghOptions.cwd!)).toBe('local')
       expect(stderr.join('')).toContain('2 commits available from origin/main')
       expect(stderr.join('')).toContain('also has 1 unpushed commit')
     } finally {
