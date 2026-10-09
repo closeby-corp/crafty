@@ -26,12 +26,34 @@ function childNode(child: CommandNode | NonNullable<CommandNode['run']>): Comman
 
 function optionsFor(nodes: readonly CommandNode[]): OptionSpec[] {
   const options = new Map(FRAMEWORK_OPTIONS.map((option) => [option.name, option]))
-  for (const node of nodes) for (const option of node.options ?? []) options.set(option.name, option)
+  for (const node of nodes) for (const option of node.options ?? []) {
+    const inherited = options.get(option.name)
+    options.set(option.name, inherited ? {
+      ...inherited,
+      ...option,
+      repeatable: inherited.repeatable || option.repeatable,
+      sensitive: inherited.sensitive || option.sensitive,
+    } : option)
+  }
   return [...options.values()]
+}
+
+function descendantDeclarations(node: CommandNode | undefined): { options: Set<string>; repeatable: Set<string> } {
+  const options = new Set<string>()
+  const repeatable = new Set<string>()
+  const visit = (current: CommandNode | undefined): void => {
+    if (!current) return
+    for (const option of current.options ?? []) options.add(option.name)
+    for (const name of current.repeatable ?? []) repeatable.add(name)
+    for (const child of Object.values(current.commands ?? {})) visit(childNode(child))
+  }
+  visit(node)
+  return { options, repeatable }
 }
 
 interface OptionToken {
   option?: OptionSpec
+  options?: OptionSpec[]
   prefix?: string
   replacementPrefix?: string
   invalid?: boolean
@@ -45,19 +67,21 @@ function optionToken(token: string, options: readonly OptionSpec[]): OptionToken
     const option = options.find((candidate) => candidate.name === name)
     if (!option || (equals !== -1 && option.type === 'boolean')) return { invalid: true }
     return equals === -1
-      ? { option }
-      : { option, prefix: token.slice(equals + 1), replacementPrefix: token.slice(0, equals + 1) }
+      ? { option, options: [option] }
+      : { option, options: [option], prefix: token.slice(equals + 1), replacementPrefix: token.slice(0, equals + 1) }
   }
+  const encountered: OptionSpec[] = []
   for (let index = 1; index < token.length; index += 1) {
     const option = options.find((candidate) => candidate.short === token[index])
     if (!option) return { invalid: true }
+    encountered.push(option)
     if (option.type === 'string') {
       return index === token.length - 1
-        ? { option }
-        : { option, prefix: token.slice(index + 1), replacementPrefix: token.slice(0, index + 1) }
+        ? { option, options: encountered }
+        : { option, options: encountered, prefix: token.slice(index + 1), replacementPrefix: token.slice(0, index + 1) }
     }
   }
-  return {}
+  return { options: encountered }
 }
 
 /** Resolve declarations/providers only: never execute target handlers or hooks. */
@@ -93,25 +117,59 @@ export async function completeWords(registry: readonly RegisteredCommand[], word
     else tokens.push(token)
   }
 
-  // Repeatable long options are pulled before parseArgs, and can consume even
-  // flag-looking values. They need not have a corresponding OptionSpec.
+  // Repeatable options are pulled before route parsing, and can consume even
+  // flag-looking values. Legacy long names need not have an OptionSpec.
   const rootPosition = tokens[0] === 'help' || tokens[0] === '--help' || tokens[0] === '-h' ? 1 : 0
   const root = registry.find((entry) => entry.name === tokens[rootPosition] || entry.definition.aliases?.includes(tokens[rootPosition]!))
   let repeatPending: OptionSpec | undefined
+  const repeatOccurrences: string[] = []
   const routedTokens = tokens.slice(0, rootPosition + 1)
   for (let position = rootPosition + 1; position < tokens.length; position += 1) {
     const token = tokens[position]!
-    const name = token.startsWith('--') ? token.slice(2).split('=')[0]! : ''
-    if (!root?.repeatable.includes(name)) {
-      routedTokens.push(token)
-      continue
+    if (token.startsWith('--')) {
+      const equals = token.indexOf('=')
+      const name = token.slice(2, equals === -1 ? undefined : equals)
+      if (root?.repeatable.includes(name)) {
+        repeatOccurrences.push(name)
+        if (equals !== -1) continue
+        if (position + 1 === tokens.length) {
+          repeatPending = { ...root.options.find((option) => option.name === name), name, type: 'string' }
+          break
+        }
+        position += 1
+        continue
+      }
     }
-    if (token.includes('=')) continue
-    if (position + 1 === tokens.length) {
-      repeatPending = { ...root.options.find((option) => option.name === name), name, type: 'string' }
-      break
+    if (root && token.startsWith('-') && !token.startsWith('--')) {
+      let consumed = false
+      for (let offset = 1; offset < token.length; offset += 1) {
+        const option = root.options.find((candidate) => candidate.short === token[offset])
+        if (!option) continue
+        if (option.type !== 'string') continue
+        if (!root.repeatable.includes(option.name)) break
+        repeatOccurrences.push(option.name)
+        const attached = token.slice(offset + 1)
+        const prefix = token.slice(0, offset)
+        if (prefix.length > 1) routedTokens.push(prefix)
+        if (attached) {
+          consumed = true
+          break
+        }
+        if (position + 1 === tokens.length) {
+          repeatPending = option
+          consumed = true
+          break
+        }
+        position += 1
+        consumed = true
+        break
+      }
+      if (consumed) {
+        if (repeatPending) break
+        continue
+      }
     }
-    position += 1
+    routedTokens.push(token)
   }
 
   let command: RegisteredCommand | undefined
@@ -120,6 +178,7 @@ export async function completeWords(registry: readonly RegisteredCommand[], word
   let help = false
   let pending: OptionSpec | undefined
   let invalid = false
+  const optionOccurrences = [...repeatOccurrences]
   let union: readonly OptionSpec[] = rootOptions
   for (const token of routedTokens) {
     if (pending) {
@@ -143,6 +202,7 @@ export async function completeWords(registry: readonly RegisteredCommand[], word
     if (token.startsWith('-') && token !== '-') {
       const parsed = optionToken(token, union)
       if (parsed.invalid) { invalid = true; break }
+      for (const option of parsed.options ?? []) optionOccurrences.push(option.name)
       if (parsed.option?.type === 'string' && parsed.prefix === undefined) pending = parsed.option
       continue
     }
@@ -157,6 +217,15 @@ export async function completeWords(registry: readonly RegisteredCommand[], word
   }
   if (invalid) return values(current)
   const inherited = command ? optionsFor(nodes) : rootOptions
+  if (command) {
+    const declarations = descendantDeclarations(node)
+    const inheritedNames = new Set([...inherited.map((option) => option.name), ...declarations.options])
+    const legacyRepeatable = declarations.repeatable
+    for (const selected of nodes) for (const name of selected.repeatable ?? []) legacyRepeatable.add(name)
+    for (const name of optionOccurrences) {
+      if (!inheritedNames.has(name) && !legacyRepeatable.has(name)) return values(current)
+    }
+  }
   // Route-local declarations override ancestors; the union still recognizes
   // descendant flags before their route has been reached.
   const selectedOption = (option: OptionSpec): OptionSpec => inherited.find((entry) => entry.name === option.name) ?? option

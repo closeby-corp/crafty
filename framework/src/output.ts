@@ -5,7 +5,7 @@
 import { CliError, flag, option, write, writeErr, PROGRAM } from './cli.ts'
 import type { OptionSpec, ParsedArgs, Values } from './cli.ts'
 import { asOpsError, ConfigError, OpsError, usageError } from './errors.ts'
-import { log } from './log.ts'
+import { log, redactString, redactValue } from './log.ts'
 
 export { flag, option, write, writeErr } from './cli.ts'
 
@@ -22,7 +22,7 @@ export type OutputFormat = 'auto' | 'plain' | 'table' | 'csv'
 const FORMATS = ['json', 'plain', 'table', 'csv']
 
 export interface Ctx {
-  /** The data source the verb reads: `opensearch`, `ssh`, `recipe`, ... */
+  /** The data source the verb reads. */
   source: string
   /** The target the verb settled on, once it knows it. */
   target: string | null
@@ -40,6 +40,8 @@ export interface Ctx {
   tail: string[]
   /** Values given for options declared repeatable. */
   repeat: Record<string, string[]>
+  /** Sensitive option spellings on the selected command path, for explicit preview redaction. */
+  sensitiveArgvOptions?: string[]
   /** Dynamic command segments captured along the selected path. */
   params: Record<string, string>
   /** Resources owned by this invocation's hooks and handler. */
@@ -212,6 +214,8 @@ export interface PlannedRequest {
   url?: string
   body?: unknown
   argv?: string[]
+  /** Client-declared argv spellings whose values contain secrets (for previews only). */
+  sensitiveArgvOptions?: readonly string[]
 }
 
 /**
@@ -230,10 +234,15 @@ export function gateMutation(ctx: Ctx, description: string, planned: PlannedRequ
 export function emitDryRun(ctx: Ctx, description: string, planned: PlannedRequest): void {
   const target = manifest(planned)
   if (ctx.json) {
-    emitResult(ctx, { action: description, request: target }, { truncated: false })
+    const previewCtx = {
+      ...ctx,
+      source: redactString(ctx.source),
+      target: ctx.target === null ? null : redactString(ctx.target),
+    }
+    emitResult(previewCtx, { action: redactString(description), request: target }, { truncated: false })
     return
   }
-  write(`dry-run: ${description}\n`)
+  write(`dry-run: ${redactString(description)}\n`)
   write(plainText(target))
 }
 
@@ -241,10 +250,57 @@ export function emitDryRun(ctx: Ctx, description: string, planned: PlannedReques
 export function manifest(planned: PlannedRequest): Record<string, unknown> {
   const out: Record<string, unknown> = {}
   if (planned.method !== undefined) out['method'] = planned.method
-  if (planned.url !== undefined) out['url'] = planned.url
-  else if (planned.path !== undefined) out['path'] = planned.path
-  if (planned.argv !== undefined) out['command'] = planned.argv.join(' ')
-  if (planned.body !== undefined) out['body'] = planned.body
+  if (planned.url !== undefined) out['url'] = redactString(planned.url)
+  else if (planned.path !== undefined) out['path'] = redactString(planned.path)
+  if (planned.argv !== undefined) out['command'] = redactArgv(planned.argv, planned.sensitiveArgvOptions).join(' ')
+  if (planned.body !== undefined) out['body'] = redactValue(planned.body)
+  return out
+}
+
+function redactArgv(argv: string[], declaredSensitiveOptions: readonly string[] = []): string[] {
+  const sensitiveOptions = new Set(declaredSensitiveOptions.filter((option) => /^--?[^\s=]+$/.test(option)))
+  const out: string[] = []
+  for (let index = 0; index < argv.length; index += 1) {
+    const arg = argv[index]!
+    const sensitiveLongOption = [...sensitiveOptions].find((option) =>
+      option.startsWith('--') && (arg === option || arg.startsWith(`${option}=`)))
+    const sensitiveShortOption = arg.startsWith('-') && !arg.startsWith('--')
+      ? [...sensitiveOptions]
+        .filter((option) => option.startsWith('-') && !option.startsWith('--') && option.length === 2)
+        .map((option) => ({ option, index: arg.indexOf(option[1]!, 1) }))
+        .filter(({ index }) => index !== -1)
+        .sort((left, right) => left.index - right.index)[0]?.option
+      : undefined
+    const sensitiveOption = sensitiveLongOption ?? sensitiveShortOption
+    const automaticSensitiveOption =
+      /^--?(?:access[_-]?token|refresh[_-]?token|client[_-]?secret|(?:[\w-]*[_-])?(?:token|secret|password|credential|authorization|api[_-]?key))$/i.test(arg)
+    if (sensitiveOption && arg !== sensitiveOption) {
+      if (sensitiveOption.startsWith('-') && !sensitiveOption.startsWith('--')) {
+        const aliasIndex = arg.indexOf(sensitiveOption[1]!, 1)
+        if (aliasIndex !== -1) {
+          const prefix = arg.slice(0, aliasIndex + 1)
+          const attached = arg.slice(aliasIndex + 1)
+          out.push(`${prefix}${attached ? '[redacted]' : ''}`)
+          if (!attached && argv[index + 1] !== undefined) {
+            out.push('[redacted]')
+            index += 1
+          }
+          continue
+        }
+      }
+      const separator = arg.startsWith(`${sensitiveOption}=`) ? '=' : ''
+      out.push(`${sensitiveOption}${separator}[redacted]`)
+      continue
+    }
+    out.push(redactString(arg))
+    if (automaticSensitiveOption || sensitiveOption) {
+      const value = argv[index + 1]
+      if (value !== undefined) {
+        out.push('[redacted]')
+        index += 1
+      }
+    }
+  }
   return out
 }
 
@@ -278,6 +334,7 @@ export function makeCtx(info: CommandInfo, parsed: ParsedArgs, repeat: Record<st
     positionals: parsed.positionals,
     tail: parsed.tail,
     repeat,
+    sensitiveArgvOptions: [],
     params: Object.create(null),
     state: Object.create(null),
   }
@@ -291,27 +348,65 @@ export function makeCtx(info: CommandInfo, parsed: ParsedArgs, repeat: Record<st
 export function pullRepeatable(
   argv: string[],
   names: string[],
+  options: readonly OptionSpec[] = [],
 ): { argv: string[]; repeat: Record<string, string[]> } {
-  if (names.length === 0) return { argv, repeat: {} }
+  const repeatNames = new Set(names)
+  const repeatShorts = new Map<string, string>()
+  const stringShorts = new Map<string, string>()
+  for (const option of options) {
+    if (option.type === 'string' && option.short) stringShorts.set(option.short, option.name)
+    if (option.repeatable) {
+      repeatNames.add(option.name)
+    }
+    if (option.type === 'string' && option.short && repeatNames.has(option.name)) repeatShorts.set(option.short, option.name)
+  }
+  if (repeatNames.size === 0) return { argv, repeat: {} }
   const separator = argv.indexOf('--')
   const head = separator === -1 ? argv : argv.slice(0, separator)
   const tail = separator === -1 ? [] : argv.slice(separator + 1)
   const keep: string[] = []
   const repeat: Record<string, string[]> = {}
+  const appendRepeat = (name: string, value: string): void => {
+    const previous = Object.prototype.hasOwnProperty.call(repeat, name) ? repeat[name]! : []
+    Object.defineProperty(repeat, name, {
+      value: [...previous, value], enumerable: true, configurable: true, writable: true,
+    })
+  }
   for (let index = 0; index < head.length; index += 1) {
     const arg = head[index]!
-    const name = arg.startsWith('--') ? arg.slice(2).split('=')[0]! : ''
-    if (!names.includes(name)) {
-      keep.push(arg)
+    if (arg.startsWith('--')) {
+      const equals = arg.indexOf('=')
+      const name = arg.slice(2, equals === -1 ? undefined : equals)
+      if (!repeatNames.has(name)) { keep.push(arg); continue }
+      const value = equals === -1 ? head[index + 1] : arg.slice(equals + 1)
+      if (value === undefined) throw usageError(`--${name} needs a value`)
+      appendRepeat(name, value)
+      if (equals === -1) index += 1
       continue
     }
-    if (arg.includes('=')) repeat[name] = [...(repeat[name] ?? []), arg.slice(arg.indexOf('=') + 1)]
-    else {
-      const value = head[index + 1]
-      if (value === undefined) throw usageError(`--${name} needs a value`)
-      repeat[name] = [...(repeat[name] ?? []), value]
-      index += 1
+    if (arg.startsWith('-') && arg !== '-') {
+      let repeated = false
+      for (let shortIndex = 1; shortIndex < arg.length; shortIndex += 1) {
+        const name = repeatShorts.get(arg[shortIndex]!)
+        if (!name) {
+          // A string option owns the rest of its short cluster, including text
+          // that happens to contain a repeatable option's alias.
+          if (stringShorts.has(arg[shortIndex]!)) break
+          continue
+        }
+        const attached = arg.slice(shortIndex + 1)
+        const value = attached || head[index + 1]
+        if (value === undefined) throw usageError(`-${arg[shortIndex]} needs a value`)
+        appendRepeat(name, value)
+        if (!attached) index += 1
+        const prefix = arg.slice(0, shortIndex)
+        if (prefix.length > 1) keep.push(prefix)
+        repeated = true
+        break
+      }
+      if (repeated) continue
     }
+    keep.push(arg)
   }
   return { argv: separator === -1 ? keep : [...keep, '--', ...tail], repeat }
 }
@@ -324,28 +419,30 @@ export function reportFailure(error: unknown, info: CommandInfo, ctx: Ctx | null
   ops.at(info.source, ctx?.target)
   const json = ctx?.json ?? looksJson(argv)
   const path = ctx?.path ?? info.path
+  const message = redactString(ops.message)
+  const hint = ops.hint === undefined ? undefined : redactString(ops.hint)
 
   if (json) {
     emitEnvelope({
       ok: false,
-      source: ops.source ?? info.source,
-      target: ops.target,
+      source: redactString(ops.source ?? info.source),
+      target: ops.target === null ? null : redactString(ops.target),
       meta: { truncated: false, duration_ms: ctx === null ? 0 : Date.now() - ctx.startedAt },
-      error: { kind: ops.kind, message: ops.message, status: ops.status ?? null, hint: ops.hint ?? null },
+      error: { kind: ops.kind, message, status: ops.status ?? null, hint: hint ?? null },
     })
     return ops.exitCode
   }
 
   if (ops instanceof ConfigError) {
-    writeErr(`${program} config: ${ops.path} has ${ops.problems.length} problem(s)\n`)
-    for (const line of ops.message.split('\n')) writeErr(`  ${line}\n`)
+    writeErr(`${redactString(program)} config: ${redactString(ops.path)} has ${ops.problems.length} problem(s)\n`)
+    for (const line of message.split('\n')) writeErr(`  ${line}\n`)
     return ops.exitCode
   }
 
-  writeErr(`${path}: ${ops.message}\n`)
-  if (ops.hint !== undefined) writeErr(`hint: ${ops.hint}\n`)
-  if (ops.kind === 'usage') writeErr(`\n${(ctx?.usage ?? info.usage).join('\n')}\n`)
-  if (ops.kind === 'internal') log.error('command failed', { command: path, error: ops.message })
+  writeErr(`${redactString(path)}: ${message}\n`)
+  if (hint !== undefined) writeErr(`hint: ${hint}\n`)
+  if (ops.kind === 'usage') writeErr(`\n${(ctx?.usage ?? info.usage).map(redactString).join('\n')}\n`)
+  if (ops.kind === 'internal') log.error('command failed', { command: path, error: message })
   return ops.exitCode
 }
 

@@ -375,7 +375,14 @@ describe('file-discovered command loading', () => {
     writeFileSync(join(directory, 'ignored.d.ts'), 'invalid syntax')
     mkdirSync(join(directory, 'nested'))
     writeFileSync(join(directory, 'nested', 'hidden.ts'), source('hidden', 'hidden'))
-    symlinkSync(join(directory, 'alpha.ts'), join(directory, 'linked.ts'))
+    let hasSymlink = true
+    try {
+      symlinkSync(join(directory, 'alpha.ts'), join(directory, 'linked.ts'), 'file')
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code
+      if (process.platform !== 'win32' || !['EACCES', 'ENOSYS', 'ENOTSUP', 'EPERM'].includes(code ?? '')) throw error
+      hasSymlink = false
+    }
     await loadCommands(directory)
     expect(Reflect.get(globalThis, orderKey)).toEqual(['alpha', 'gamma', 'zeta'])
     expect(Reflect.get(globalThis, lifecycleKey)).toEqual([])
@@ -385,7 +392,7 @@ describe('file-discovered command loading', () => {
     expect(resolveCommand('gamma')!.name).toBe('gamma')
     expect(await runCommand(resolveCommand('gamma')!, [])).toBe(0)
     expect(Reflect.get(globalThis, lifecycleKey)).toEqual(['gamma'])
-    expect(resolveCommand('linked')).toBeUndefined()
+    if (hasSymlink) expect(resolveCommand('linked')).toBeUndefined()
   })
 
   test('supports empty directories and rejects missing directories and invalid default exports', async () => {

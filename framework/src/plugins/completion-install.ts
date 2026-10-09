@@ -15,6 +15,7 @@ export interface CompletionInstallation {
   shell: 'bash' | 'zsh'
   path: string
   changed: boolean
+  activation: string
 }
 
 /** Append only our registration block; leave existing bytes, modes and symlinks intact. */
@@ -38,11 +39,14 @@ export async function installCompletion({ program, shell, home, zdotdir }: Insta
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
   }
-  if (existing.includes(block)) return { shell, path, changed: false }
+  const activation = shell === 'bash'
+    ? `Bash reads ${quote(path)} for interactive non-login shells. For interactive login shells, add this line to your login profile if it does not already source ${quote(path)}:\nsource ${quote(path)}`
+    : `Open a new interactive Zsh shell to activate completions from ${quote(path)}.`
+  if (existing.includes(block)) return { shell, path, changed: false, activation }
   if (existing.includes(begin) || existing.includes(end)) {
     throw usageError(`An edited or incomplete Crafty completion block already exists in ${path}. Remove that block before reinstalling.`)
   }
   await mkdir(dirname(path), { recursive: true, mode: 0o700 })
   await appendFile(path, `${existing && !existing.endsWith('\n') ? '\n' : ''}${block}`, { mode: 0o600 })
-  return { shell, path, changed: true }
+  return { shell, path, changed: true, activation }
 }

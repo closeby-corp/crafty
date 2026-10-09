@@ -10,9 +10,8 @@ export default {
   summary: 'Print the words it was given',
   options: [
     { name: 'upper', type: 'boolean' },
-    { name: 'tag', type: 'string' },
+    { name: 'tag', type: 'string', repeatable: true },
   ],
-  repeatable: ['tag'],
   run(ctx) {
     const words = [...ctx.positionals, ...ctx.tail]
     const text = flag(ctx.values, 'upper') ? words.join(' ').toUpperCase() : words.join(' ')

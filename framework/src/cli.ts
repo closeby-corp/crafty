@@ -1,4 +1,5 @@
 import { parseArgs } from 'node:util'
+import { AsyncLocalStorage } from 'node:async_hooks'
 import { runCommand } from './command.ts'
 import type { RegisteredCommand } from './command.ts'
 import { OpsError, usageError } from './errors.ts'
@@ -34,6 +35,10 @@ export interface OptionSpec {
   name: string
   type: 'boolean' | 'string'
   short?: string
+  /** Permit this string option to appear more than once; values are exposed in `ctx.repeat`. */
+  repeatable?: boolean
+  /** Register supplied values for redaction and expose its spellings on the invocation context. */
+  sensitive?: boolean
   /** Lazy client-owned values, explicit enums, or native filesystem completion. */
   completion?: 'file' | 'directory' | ValueCompletion
 }
@@ -49,11 +54,29 @@ export interface ParsedArgs {
 
 const HELP: OptionSpec = { name: 'help', type: 'boolean', short: 'h' }
 
+interface CliConfigScope {
+  configPath: string | undefined
+}
+
+const cliConfigScope = new AsyncLocalStorage<CliConfigScope>()
 let configPathOverride: string | undefined
+
+/** Run a CLI layer in a scoped config context, inheriting and restoring nested calls. */
+export async function withCliConfigScope<T>(callback: () => Promise<T>): Promise<T> {
+  const current = cliConfigScope.getStore()
+  return await cliConfigScope.run({ configPath: current?.configPath }, callback)
+}
 
 /** The `--config` path given on the command line, if any. */
 export function configPathFromCli(): string | undefined {
-  return configPathOverride
+  const scope = cliConfigScope.getStore()
+  return scope ? scope.configPath : configPathOverride
+}
+
+function setConfigPathFromCli(path: string): void {
+  const scope = cliConfigScope.getStore()
+  if (scope) scope.configPath = path
+  else configPathOverride = path
 }
 
 /**
@@ -72,12 +95,12 @@ export function extractGlobalOptions(argv: string[]): string[] {
     if (arg === '--config' || arg === '-c') {
       const value = argv[index + 1]
       if (value === undefined || value.startsWith('-')) throw new CliError(`${arg} needs a path`)
-      configPathOverride = value
+      setConfigPathFromCli(value)
       index += 1
       continue
     }
     if (arg.startsWith('--config=')) {
-      configPathOverride = arg.slice('--config='.length)
+      setConfigPathFromCli(arg.slice('--config='.length))
       continue
     }
     rest.push(arg)
@@ -106,25 +129,14 @@ export function parseCommandArgs(argv: string[], options: OptionSpec[] = []): Pa
     config[option.name] = option.short ? { type: option.type, short: option.short } : { type: option.type }
   }
 
-  // parseArgs keeps only the last value of a repeated single-value option, so
-  // detect the repeat here instead of silently dropping what the operator typed.
-  const shortNames = new Map(specs.flatMap((option) => (option.short ? [[option.short, option.name] as const] : [])))
-  const seen = new Map<string, number>()
-  for (const arg of argv) {
-    const name = arg.startsWith('--')
-      ? arg.slice(2).split('=')[0]
-      : /^-[^-]$/.test(arg)
-        ? shortNames.get(arg.slice(1))
-        : undefined
-    if (name === undefined) continue
-    if (specs.find((option) => option.name === name)?.type !== 'string') continue
-    const count = (seen.get(name) ?? 0) + 1
-    if (count > 1) throw new CliError(`--${name} may only be given once`)
-    seen.set(name, count)
-  }
-
   try {
-    const parsed = parseArgs({ args: argv, options: config, allowPositionals: true, strict: true })
+    const parsed = parseArgs({ args: argv, options: config, allowPositionals: true, strict: true, tokens: true })
+    const seen = new Set<string>()
+    for (const token of parsed.tokens) {
+      if (token.kind !== 'option' || specs.find((option) => option.name === token.name)?.type !== 'string') continue
+      if (seen.has(token.name)) throw new CliError(`--${token.name} may only be given once`)
+      seen.add(token.name)
+    }
     return { values: parsed.values as Values, positionals: parsed.positionals, tail: [] }
   } catch (error) {
     throw new CliError(error instanceof Error ? error.message : String(error))
@@ -146,9 +158,8 @@ export function option(values: Values, name: string): string | undefined {
  * ------------------------------------------------------------------ */
 
 /**
- * Where `write` sends its text. The recipe engine swaps this for a capture
- * buffer so a step's output can be echoed, recorded and substituted without
- * spawning a second process; `null` restores stdout.
+ * Where `write` sends its text. Callers can swap this for a capture buffer;
+ * `null` restores stdout.
  */
 let outputSink: ((text: string) => void) | null = null
 
@@ -230,7 +241,7 @@ export function usageText(program = PROGRAM): string {
 }
 
 /** Route the root word; all command parsing and lifecycle work uses runCommand. */
-export async function run(rawArgv: string[], program = PROGRAM): Promise<number> {
+async function runInConfigScope(rawArgv: string[], program: string): Promise<number> {
   try {
     const [first, ...rest] = extractGlobalOptions(rawArgv)
     if (first === undefined) {
@@ -253,4 +264,8 @@ export async function run(rawArgv: string[], program = PROGRAM): Promise<number>
   } catch (error) {
     return reportFailure(error, { source: 'cli', path: program, usage: usageText(program).trimEnd().split('\n') }, null, rawArgv, program)
   }
+}
+
+export async function run(rawArgv: string[], program = PROGRAM): Promise<number> {
+  return withCliConfigScope(() => runInConfigScope(rawArgv, program))
 }

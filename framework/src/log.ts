@@ -1,28 +1,39 @@
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error'
 
 const knownSecrets = new Set<string>()
-const secretKeyPattern = /token|secret|password|credential|authorization/i
+const secretKeyPattern = /token|secret|password|credential|authorization|api[_-]?key/i
 
-/**
- * Register a value that must never appear in logs. Values shorter than 8
- * characters are ignored because masking them would destroy log readability
- * for no real benefit.
- */
+/** Register a non-empty value that must never appear in logs. */
 export function registerSecret(value: string | undefined | null): void {
-  if (value && value.length >= 8) knownSecrets.add(value)
+  if (value) knownSecrets.add(value)
 }
 
 export function redactString(text: string): string {
   let out = text
-  for (const secret of knownSecrets) out = out.split(secret).join('[redacted]')
-  return out.replace(/\b(bearer|basic)\s+\S+/gi, '$1 [redacted]')
+  for (const secret of [...knownSecrets].sort((a, b) => b.length - a.length)) {
+    out = out.split(secret).join('[redacted]')
+  }
+  return out
+    .replace(/\b(bearer|basic)\s+\S+/gi, '$1 [redacted]')
+    // Userinfo is sensitive even when its password was never registered.
+    .replace(/\b([a-z][a-z\d+.-]*:\/\/)[^\s/?#@]+@/gi, '$1[redacted]@')
+    // Cover secrets embedded in command-line strings, URLs, and diagnostic text.
+    .replace(
+      /(^|[^\w-])(--)?(access[_-]?token|refresh[_-]?token|client[_-]?secret|(?:[\w-]*[_-])?(?:token|secret|password|credential|authorization|api[_-]?key))\b(\s*(?:=|:)\s*|\s+)("[^"]*"|'[^']*'|[^\s&,;]+)/gi,
+      (match, prefix: string, optionPrefix: string | undefined, key: string, separator: string) => {
+        // In prose, a bare word such as "token expired" is not a key/value.
+        if (!optionPrefix && /^\s+$/.test(separator)) return match
+        return `${prefix}${optionPrefix ?? ''}${key}${separator}[redacted]`
+      },
+    )
 }
 
-function redactValue(value: unknown, key?: string): unknown {
+export function redactValue(value: unknown, key?: string): unknown {
   if (key && secretKeyPattern.test(key)) return '[redacted]'
   if (typeof value === 'string') return redactString(value)
   if (Array.isArray(value)) return value.map((entry) => redactValue(entry))
   if (value instanceof Error) return redactString(value.message)
+  if (value instanceof Date) return new Date(value.getTime())
   if (value && typeof value === 'object') {
     return Object.fromEntries(
       Object.entries(value as Record<string, unknown>).map(([k, v]) => [k, redactValue(v, k)]),
@@ -38,8 +49,14 @@ function emit(level: LogLevel, message: string, fields?: Record<string, unknown>
     msg: redactString(message),
     ...(fields ? (redactValue(fields) as Record<string, unknown>) : {}),
   })
-  if (level === 'error' || level === 'warn') console.error(line)
-  else console.log(line)
+  // Keep all diagnostics off stdout so `--json` and captured command output
+  // stay machine-readable. Use the process stream directly to avoid coupling
+  // the logger to cli.ts (which imports output.ts, which imports this module).
+  try {
+    process.stderr.write(`${line}\n`)
+  } catch (error) {
+    if ((error as { code?: string }).code !== 'EPIPE') throw error
+  }
 }
 
 export const log = {

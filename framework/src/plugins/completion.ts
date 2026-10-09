@@ -27,13 +27,13 @@ const completion: CommandModule = {
         const result = await installCompletion({
           program: programIdentity(ctx, 'install'),
           shell: option(ctx.values, 'shell') ?? basename(process.env.SHELL ?? ''),
-          home: homedir(),
+          home: process.env.HOME || homedir(),
           zdotdir: process.env.ZDOTDIR,
         })
         if (ctx.json || ctx.format !== 'auto') {
           emitResult(ctx, result)
         } else {
-          write(`${result.changed ? 'Installed' : 'Already installed'} ${result.shell} completion in ${quote(result.path)}.\nOpen a new shell to activate completions.\n`)
+          write(`${result.changed ? 'Installed' : 'Already installed'} ${result.shell} completion in ${quote(result.path)}.\n${result.activation}\n`)
         }
       },
     },

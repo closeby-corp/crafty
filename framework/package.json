@@ -7,6 +7,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./plugins/completion": "./src/plugins/completion.ts",
+    "./plugins/skills": "./src/plugins/skills.ts",
     "./SKILL.md": "./SKILL.md"
   },
   "files": ["src", "SKILL.md"],

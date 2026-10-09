@@ -2,7 +2,7 @@
 
 Bun routing, argument parsing, help, lifecycle hooks, invocation context, and structured output/errors for client-owned TypeScript commands. Requires Bun >= 1.4.
 
-The `crafty` package contains the framework and its [authoring skill](SKILL.md). It ships no integration commands, recipes, configuration template, or executable. The repository's optional client workspace is not a package dependency.
+The `crafty` package contains the framework and its [authoring skill](SKILL.md). It ships no client commands, configuration template, or executable. The repository's optional example client is not a package dependency.
 
 ## Install
 
@@ -14,7 +14,26 @@ bun add https://github.com/closeby-corp/crafty/releases/download/v0.5.1/crafty-0
 
 Commit the dependency manifest, `bun.lock`, command files, and client entrypoint. The manifest and lockfile select the installed framework version; Git versions the client commands.
 
-For agent-assisted command and recipe authoring, read `node_modules/crafty/SKILL.md`. The skill ships in the package and is exposed as `crafty/SKILL.md`; packaging does not automatically register it with an agent.
+For agent-assisted command authoring and CLI workflow guidance, read `node_modules/crafty/SKILL.md`. The skill ships in the package and is exposed as `crafty/SKILL.md`; packaging does not automatically register it with an agent.
+
+## Optional client skills plugin
+
+Clients can expose their own static workflow skills with `crafty/plugins/skills`. The framework provides a plugin factory; it neither supplies client workflow skills nor installs them automatically. Keep each skill in a flat `skills/<name>/SKILL.md` directory, with matching frontmatter `name` and a non-empty `description`.
+
+```ts
+// commands/skills.ts
+import { createSkillsPlugin } from 'crafty/plugins/skills'
+
+export default createSkillsPlugin({
+  skillsDir: new URL('../skills/', import.meta.url),
+})
+```
+
+The generated `skills list` and `skills show <name>` routes read and validate the local catalog. They do not invoke the installer or contact a network. The explicit `skills install` route delegates installation to the pinned Skills CLI (`bun x --bun skills@1.7.1 add <source>`); the first real install may download that pinned package. It accepts repeatable `--skill` and `--agent` selections, `--global`, `--copy`, `--yes`, and `--dry-run`. Project destinations use the install command's current working directory. Global scope is selected only with `--global`. Actual JSON or non-interactive installs require `--yes` and explicit skill and agent selections; an interactive human terminal may make those selections in the installer. Interactive mode preserves upstream output and exit status, which may not reveal a partial failure; use explicit selections with `--yes` for verified install records. Non-interactive installs request and validate upstream JSON results before reporting success. Dry-run returns the delegated request without launching it.
+
+The catalog uses only flat `skills/<name>/SKILL.md` entries; a root `SKILL.md` is unsupported. A boolean `internal: true` frontmatter field hides a skill from listing, showing, and installation. Symbolic links in skill directories, documents, and resources are rejected.
+
+The configured source directory is resolved from the client command module, not the current working directory. Skills belong to the client that owns the executable and should be included only in a distribution of that client. Keep them out of the framework package allowlist: they describe that client's workflows and commands. Skill content guides an agent; it does not extend Crafty's execution runtime or authorize writes.
 
 ## Link a client executable
 
@@ -67,11 +86,37 @@ Run `crafty hello world --json`. The module basename supplies the root name unle
 
 Discovery imports direct regular `.ts` files in filename order. Declaration files, subdirectories, and symlinks are ignored. Keep helpers and tests outside the command directory. Invalid modules and colliding root names/aliases fail startup with an actionable diagnostic; they are not silently skipped. Modules execute with the operator's permissions and are not sandboxed.
 
-A node has either `run` or nonempty `commands`. Function children are leaf-handler shorthand. Static routes and aliases take precedence over a single `:parameter` child per group. Tokens following `--` remain untouched in `ctx.tail`.
+A node has either `run` or nonempty `commands`. Function children are leaf-handler shorthand. Static routes and aliases take precedence over a single `:parameter` child per group. Options belong to a route node and are inherited along the selected path. Declarations on sibling routes are allowed, but using a sibling-only flag is rejected regardless of where it appears. Options may appear before or after route tokens. Tokens following `--` remain untouched in `ctx.tail`.
+
+Declare only `boolean` or `string` options. String options can set `repeatable: true` or `sensitive: true`; the legacy node-level `repeatable: ['name']` declaration remains supported.
+
+```ts
+options: [
+  { name: 'tag', type: 'string', repeatable: true },
+  { name: 'api-key', type: 'string', sensitive: true },
+]
+```
+
+Read parsed values from `ctx.values`, repeated values from `ctx.repeat`, captured route values from `ctx.params`, remaining positionals from `ctx.positionals`, and the untouched suffix after standalone `--` from `ctx.tail`. `completion` suggests values but does not validate them or provide defaults.
 
 `init(ctx)` runs outermost to innermost; `destroy(ctx)` runs in reverse order, including teardown of a node whose initialization failed. Selected hooks and the handler share one context with fresh `params` and `state`. Help and invalid routes do not run hooks.
 
 Handlers return nothing for exit 0, or an integer in 0–255. Return values are not serialized; use output helpers. JSON output commits only after successful teardown. A primary failure or explicit nonzero status takes precedence over cleanup failures.
+
+## Mutation previews and result data
+
+Use `gateMutation(ctx, description, planned)` to require `--yes` for a write and show a redacted request preview with `--dry-run`. Previews mask common credential field/long-option names and values from options declared `sensitive: true`. `registerSecret(value)` masks every nonempty explicit value, including values shorter than eight characters. For a custom subprocess, pass the selected route's sensitive spellings through as preview-only metadata:
+
+```ts
+if (gateMutation(ctx, 'set key', {
+  argv: ['cloud', 'set-key', '--api-key', key],
+  sensitiveArgvOptions: ctx.sensitiveArgvOptions,
+}) === 'stop') return
+await cloud.setKey(key)
+emitResult(ctx, { updated: true })
+```
+
+The context list contains sensitive option spellings declared on the selected route. It masks values in this preview argv only, not unrelated subprocess arguments, logs, hints, or normal result data. Keep credentials out of those outputs.
 
 ## Optional completion plugin
 
@@ -93,9 +138,9 @@ crafty completion install --shell bash  # Bash 4+
 crafty completion install --shell zsh
 ```
 
-Open a new shell after installation. Bash registration is appended to `$HOME/.bashrc`; Zsh uses `$ZDOTDIR/.zshrc`, or `$HOME/.zshrc` when `ZDOTDIR` is unset. The marked block checks that the executable is on `PATH`, then loads its adapter. Zsh runs `compinit` only when `compdef` is not already available.
+Open a new interactive shell after installation. Bash registration is appended to `$HOME/.bashrc`; Zsh uses `$ZDOTDIR/.zshrc`, or `$HOME/.zshrc` when `ZDOTDIR` is unset. Bash automatically reads `.bashrc` in interactive non-login shells. Interactive login shells read a login profile instead, so if that profile does not already source `.bashrc`, add the shell-quoted `source ~/.bashrc` equivalent reported by the installer. The same activation notice is included as `activation` in the JSON result. The marked block checks that the executable is on `PATH`, then loads its adapter. Zsh runs `compinit` only when `compdef` is not already available.
 
-Each executable has a separate block, so distinct client names coexist. Repeat installs leave the file unchanged. Existing startup bytes, permissions, and symlinks are preserved; new startup files use mode `0600`. Installation rejects edited/incomplete managed blocks; remove that block before reinstalling. To uninstall registration, remove its marked block. `--json` reports `shell`, `path`, and `changed` in the normal result envelope.
+Each executable has a separate block, so distinct client names coexist. Repeat installs leave the file unchanged. Existing startup bytes, permissions, and symlinks are preserved; new startup files use mode `0600`. Installation rejects edited/incomplete managed blocks; remove that block before reinstalling. To uninstall registration, remove its marked block. `--json` reports `shell`, `path`, `changed`, and the human-readable `activation` notice in the normal result envelope.
 
 For manual registration, add `source <(crafty completion bash)` to `~/.bashrc` (Bash 4+), or `source <(crafty completion zsh)` after `compinit` in `~/.zshrc`. These generation commands never write startup files; only explicit `completion install` does.
 
@@ -143,13 +188,14 @@ The `completion query --index <n> -- <words...>` route is the shell adapter's ma
 - `start({ commandsDir, argv?, program? }): Promise<number>` discovers commands and runs the invocation. `commandsDir` accepts a filesystem path or file URL; `argv` defaults to process arguments and `program` to `crafty`. The caller sets `process.exitCode`.
 - `CommandModule`, `CommandNode`, `CommandHandler`, `CommandHook`, `Ctx`, and `OptionSpec` describe commands and their invocation context.
 - `CompletionContext`, `CompletionProvider`, and `ValueCompletion` describe client-owned lazy value completion.
+- `createSkillsPlugin({ skillsDir })` builds client-owned list, show, and explicit install routes from a local skill source.
 - `emitResult`, envelope/table helpers, `flag`, `option`, argument-value helpers, `write`, and `writeErr` provide the existing output contract.
 - `OpsError`, `ConfigError`, `usageError`, error classification, and secret-redaction helpers provide shared diagnostics.
-- `loadCommands`, `run`, `prepareCommand`, `runCommand`, registry helpers, `configPathFromCli`, and `setOutputSink` support client-owned composition, including recipes.
+- `loadCommands`, `run`, `prepareCommand`, `runCommand`, registry helpers, `configPathFromCli`, and `setOutputSink` support generic in-process composition.
 
 Import from `crafty`, not private source paths. `program` changes generated help, routing context, and diagnostics; explicitly authored command usage remains verbatim. The registry and output sink are process-global: use one client at a time within a process, not concurrent independent hosts.
 
-The framework recognizes `--config`; the client decides how that path is interpreted. HTTP clients, credential resolution, SQL engines, SSH, recipes, and service-specific configuration schemas remain client-owned.
+The framework recognizes `--config`; the client decides how that path is interpreted. Each top-level `run()` or `runCommand()` call starts with a fresh selected config path; nested calls inherit it, and a child's `--config` override is restored to the parent after success or failure. HTTP clients, credential resolution, SQL engines, SSH, and service-specific configuration schemas remain client-owned.
 
 ## Development and packaging
 
@@ -162,7 +208,9 @@ bun run typecheck
 bun pm pack
 ```
 
-The package allowlist includes `src/` and `SKILL.md`; the standard manifest and README are also included. It excludes the client workspace and every integration. No compiled binary or adjacent-source-tree layout is required.
+`bun run test` includes a packed-consumer test: it creates a tarball, installs it in a temporary client, and exercises its public imports, command discovery, JSON output, errors, logging, and packaged skill from another working directory. CI runs install, tests, and typecheck on Ubuntu, macOS, and Windows with Bun 1.4.2. Bash completion integration is POSIX-only and runs with Bash 4+; core and packed-consumer tests also run on Windows.
+
+The package allowlist includes framework `src/` and `SKILL.md`; the standard manifest and README are also included. It excludes the client workspace and all client-owned skills and integrations. No compiled binary or adjacent-source-tree layout is required.
 
 ## 0.5.1 changes
 
@@ -172,7 +220,7 @@ Removed flag-name suggestions from completion menus. Commands, aliases, configur
 
 Added lazy synchronous/asynchronous value providers for inherited string options and dynamic route parameters, including selected configuration paths and captured parameters. Verified with 50 framework tests, 8 example-client tests, both typechecks, direct CLI queries, and interactive Bash Tab completion against an isolated configuration.
 
-The client command/recipe authoring skill now ships as `SKILL.md` in the package, with installed-package links and guidance for configuration-backed completion.
+At the time of Crafty 0.5.0, the packaged skill covered command and recipe authoring. It ships as `SKILL.md` with installed-package links and guidance for configuration-backed completion.
 
 ## 0.4.0 changes
 

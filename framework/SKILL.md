@@ -1,30 +1,17 @@
 ---
 name: crafty-authoring
-description: Create or modify client-owned Crafty CLI commands, optional plugins, and Markdown recipes. Use when adding command routes, arguments, lifecycle hooks, configuration access, completion metadata, or reusable workflows to a Bun client that imports crafty.
+description: Create or modify client-owned Crafty CLI commands and workflow skills. Use when adding command routes, arguments, lifecycle hooks, configuration access, completion metadata, a skills catalog, or guidance for a Bun client that imports crafty.
 ---
 
-# Crafty command and recipe authoring
+# Crafty command and CLI workflow authoring
 
-## Scope and sources of truth
+Crafty is an installed Bun framework. Target the client's installed version and conventions. Inspect its dependency manifest, executable entrypoint, neighboring commands, helpers, and tests before editing. Import public APIs from `crafty` or documented subpaths, never private source paths. The packaged framework and this skill do not install or register a client CLI automatically.
 
-Crafty is an installed Bun framework; each client versions its commands and workflows in its own repository. Target the client's installed version and existing conventions, not an imagined API.
+## Find and edit the client
 
-This skill ships as `node_modules/crafty/SKILL.md` in Crafty 0.5.0 and newer. Packaging does not register it automatically; copy it into your agent's skill directory when needed.
+Read the entrypoint to find `start({ commandsDir, program })` and use its CLI name in examples. Put discovered command modules in the configured directory, and keep helpers and tests outside it. Reuse the client's configuration, transport, credential, and output conventions. An application-specific operation usually belongs in the client, not in the framework.
 
-- See the adjacent [framework contract](README.md) and `src/index.ts` for public exports.
-- Framework source and the optional client workspace live in the [Crafty repository](https://github.com/closeby-corp/crafty). The client workspace is not shipped in the package.
-- External clients import from `crafty` and documented subpaths, never private source files. Inspect their dependency manifest, entrypoint, helpers, and neighboring commands before editing.
-
-Choose a **command** for a new operation or reusable capability. Choose a **recipe** for a named, parameterized sequence of existing commands with explanatory prose. A recipe composes capabilities; it does not implement a missing command or execute arbitrary shell syntax.
-
-## Locate the client before editing
-
-1. Read `package.json` and the executable entrypoint. Find `start({ commandsDir, program })` and use that CLI name in examples and authored usage.
-2. Inspect a neighboring command and relevant client helpers. Reuse the client's configuration, transport, credential, and output conventions.
-3. Keep command modules in the designated directory; put helpers in `lib/` and tests in `test/`, and recipe files in the client's recipe directory when that client has one.
-4. Keep the framework dependency and lockfile versioned. Do not change the framework for an application-specific operation.
-
-A minimal entrypoint looks like this; `toolbox` is an example client name, not a required name:
+A minimal entrypoint is:
 
 ```ts
 #!/usr/bin/env bun
@@ -36,20 +23,15 @@ process.exitCode = await start({
 })
 ```
 
-Its manifest uses `"bin": { "toolbox": "./cli.ts" }`. Make the entrypoint executable and run `bun link` from that client only when setting up its executable. Adding or changing commands does not require rebuilding or relinking.
+## Declare command routes and options
 
-## Author a command module
-
-Discovery imports direct regular `.ts` files in filename order. It ignores declarations, subdirectories, and symlinks. The filename supplies the root command name unless the module sets `name`. Default-export a plain object checked with `satisfies CommandModule`.
-
-For example, create `commands/greet.ts`:
+Discovery imports direct regular `.ts` files in filename order. The filename supplies the root command name unless the module sets `name`. Default-export a plain object checked with `satisfies CommandModule`.
 
 ```ts
-import { emitResult, flag, option, usageError, type CommandModule } from 'crafty'
+import { emitResult, flag, option, type CommandModule } from 'crafty'
 
 export default {
   summary: 'Greet a subject',
-  aliases: ['hello'],
   options: [
     { name: 'language', type: 'string', short: 'l', completion: ['en', 'pt'] },
     { name: 'shout', type: 'boolean' },
@@ -57,149 +39,67 @@ export default {
   commands: {
     ':subject': {
       run(ctx) {
-        if (ctx.positionals.length || ctx.tail.length) {
-          throw usageError('expected exactly one subject')
-        }
         const language = option(ctx.values, 'language') ?? 'en'
-        if (language !== 'en' && language !== 'pt') {
-          throw usageError('--language must be en or pt')
-        }
         const greeting = `${language === 'pt' ? 'Olá' : 'Hello'}, ${ctx.params.subject}`
-        emitResult(ctx, {
-          greeting: flag(ctx.values, 'shout') ? greeting.toUpperCase() : greeting,
-        })
+        emitResult(ctx, { greeting: flag(ctx.values, 'shout') ? greeting.toUpperCase() : greeting })
       },
     },
   },
 } satisfies CommandModule
 ```
 
-Run it through the client: `bun run cli.ts greet Ada --language pt --shout --json`.
+- A node has either `run` or nonempty `commands`. Static child names and aliases win over a `:parameter` child; each sibling set can have at most one parameter child. Options can be declared on sibling routes, but only options on the selected route and its ancestors are accepted.
+- Options are declared as `OptionSpec` entries. String options can set `repeatable: true` or `sensitive: true`; read values with `option(ctx.values, name)` and `ctx.repeat[name]`. The legacy node-level `repeatable: ['name']` form remains supported.
+- Flags inherit along the selected route. Options may appear before or after route words; option use is checked against the selected route and its ancestors. Use `--` to end option parsing; all following arguments stay in `ctx.tail` unchanged. Pass argument arrays to subprocess APIs and do not concatenate untrusted values into shell code.
+- `completion` suggests values; it does not validate them or supply defaults. Validate user input and its count explicitly. Only `boolean` and `string` option types exist.
+- Global options include help, config, JSON, format, color, and verbose controls. Do not reuse their names or short flags. Explicit `usage` strings remain verbatim, so update them when command behavior changes.
 
-### Routing and arguments
+## Handle resources, output, and writes
 
-- Each node has either a `run` handler or nonempty `commands`, never both. A child function is leaf-handler shorthand.
-- Use static child keys for verbs and `:parameter` keys for routed identifiers. At most one dynamic child per sibling set; static names and aliases win over it. Parameter names cannot repeat along a path.
-- Read captured route values from `ctx.params`; `ctx.positionals` contains arguments left after routing. Validate their count and meaning explicitly.
-- Declare flags in `options`. Only `boolean` and `string` types exist; parse and validate numeric/string domains yourself. `completion` suggests values but does not validate them or supply defaults.
-- Use `flag(ctx.values, name)` and `option(ctx.values, name)`. Declare intentionally repeatable options with `repeatable: ['name']` and read their lists from `ctx.repeat`.
-- Everything after standalone `--` is untouched in `ctx.tail`. Pass argument arrays to subprocess APIs; do not concatenate untrusted values into shell code.
-- Global options already include help, config, JSON, format, color, and verbose controls. Do not repurpose them or create conflicting names/short flags.
-- Generated help follows `program` and the selected route. Explicit `usage` strings remain verbatim; update them when the client's CLI name or contract changes.
+`init(ctx)` runs from the root to the selected route and `destroy(ctx)` runs in reverse, including when initialization fails. Ancestors and the handler share invocation-local `ctx.state` and `ctx.params`. Acquire resources in hooks or handlers, not during module import, and make teardown safe after partial acquisition.
 
-### Hooks and resources
+Use `emitResult(ctx, data, meta?)` for structured output. A returned object is not serialized; handlers return nothing or an exit status from 0 to 255. Use `usageError` for invalid arguments, `ConfigError` for configuration validation, and `OpsError` for operational failures. Let Crafty report errors; do not call `process.exit()` inside a command. JSON output is committed only after teardown succeeds.
 
-`init(ctx)` runs outermost to innermost. `destroy(ctx)` runs in reverse, including for a node whose initialization failed. Ancestors and the handler share fresh invocation-local `ctx.state` and `ctx.params`.
+Use `gateMutation(ctx, description, planned)` for writes: it requires `--yes`, while `--dry-run` prints a redacted preview and stops before the request. Sensitive declared option values are registered for log and preview redaction; `registerSecret(value)` registers every nonempty explicit value, including short ones. For custom subprocess arguments, pass `ctx.sensitiveArgvOptions` through to `planned.sensitiveArgvOptions`; this metadata applies only to the preview argv. Normal result data is not automatically redacted, so avoid emitting credentials there and use framework logging/error APIs for sanitized diagnostics. Keep progress and diagnostics off result stdout.
 
-Acquire resources in hooks or handlers, not at import time. Store owned resources in `ctx.state` with client-side type narrowing; make teardown safe when acquisition only partially succeeded. Help, invalid routing, and completion metadata lookup do not run target hooks or handlers, but discovery still imports modules.
+## Treat configuration and completion as client-owned
 
-### Results and failures
+Crafty recognizes `--config` / `-c` and exposes the selected path through `configPathFromCli()`. It does not parse the file, inject `ctx.config`, or choose path precedence, environment names, format, schema, or caching. Use the client's shared typed loader and load configuration lazily so help, version, and completion remain available without it. Nested in-process CLI calls inherit the selected config path; a child override is restored after it finishes.
 
-- Use `emitResult(ctx, data, meta?)` for structured results and supported output formats. Returning an object does not emit it: handlers return `void` or an integer exit status in 0–255.
-- Use `usageError(message, hint?)` for invalid user arguments, `ConfigError(problems, path)` for configuration validation, and `OpsError` with the appropriate kind for explainable operational failures. Let the framework report failures; do not call `process.exit()` inside commands.
-- JSON output is committed only after successful teardown. A primary failure or explicit nonzero status takes precedence over cleanup failures.
-- Keep progress and diagnostics off result stdout. Use the framework's output/logging helpers and the client's credential-redaction conventions. Never emit credentials in results, hints, or recipe captures.
-
-## Configuration is client-owned
-
-Crafty 0.5.0 recognizes `--config` / `-c` and exposes its selected path through `configPathFromCli()`. It does **not** parse the file, inject `ctx.config`, or offer `start({ configFile })`. The option is stripped before command parsing and is not in `ctx.values`.
-
-Use or extend the client's shared typed loader. The client owns path precedence, environment names, file format, schema validation, and caching. Commands that need configuration call that helper, or a parent hook stores the loaded value in invocation state. Load lazily so help, version, completion, and other config-independent commands remain usable without a configuration file.
-
-Reuse the client's existing configuration loader rather than adding a second one; the UQ ops client uses `lib/targets.ts`. Do not prescribe one client's environment variables, precedence, or schema to another: `OPS_CONFIG` applies to ops only.
-
-## Optional plugins and completion
-
-A plugin registers through an explicit client command module. To enable the shipped completion plugin, create `commands/completion.ts`:
+Optional plugins are enabled by an explicit client command module. For completion, create `commands/completion.ts`:
 
 ```ts
 export { default } from 'crafty/plugins/completion'
 ```
 
-Removing the wrapper disables it. Do not make optional commands mandatory in framework startup. There is no generic plugin-install API: reuse client imports/default exports and declare any third-party dependencies in the client manifest.
+Completion providers may use the client's configuration loader and receive the selected config path and captured route parameters. Keep them lazy, return public identifiers, and do not write stdout. Metadata lookup imports command modules but does not call target handlers or hooks, so avoid import-time side effects.
 
-Add enum, file, directory, or lazy provider metadata to relevant string options. In Crafty 0.5.0 and newer, `completion` also accepts `(ctx: CompletionContext) => readonly string[] | Promise<readonly string[]>`; a dynamic `:parameter` child can declare the same array/provider on its own `completion` field. Providers receive `configPath`, captured `params`, `prefix`, `index`, and `words` through the cursor. Reuse the client's loader and pass `ctx.configPath` explicitly: the completion query transports target arguments after `--`, so `configPathFromCli()` does not see that override. Parent options are inherited; route-local declarations override their value metadata. Installed 0.4.0 clients must update their framework dependency before using providers.
+For a client's static workflow skill catalog, use the optional `crafty/plugins/skills` factory from `commands/skills.ts`:
 
-Providers run lazily for the requested value, without target hooks or handlers. Return only public identifiers, never secrets, and do not write stdout. Dynamic route values are not fetched automatically. Keep import-time code free of filesystem writes, network calls, credential reads, and resource acquisition: completion queries import all command modules.
+```ts
+import { createSkillsPlugin } from 'crafty/plugins/skills'
 
-Since Crafty 0.5.1, completion does not suggest flag names, including after a dash prefix. It still suggests commands, aliases, configured route identifiers, and declared values for options the user types explicitly.
-
-`<cli> completion install --shell bash|zsh` explicitly modifies the user's shell startup file. Do not run installation as part of command development; use an isolated home for installer verification.
-
-## Author recipes only where the client supports them
-
-Recipes are client policy. The UQ infrastructure client at `~/uq/uq-infra-support/infra/services/ops-cli` provides `recipe list`, `recipe show`, and `recipe run` from its own `commands/recipe.ts` and `lib/recipes/engine.ts`. The contract below describes that engine. Crafty 0.5.0 does not export `crafty/plugins/recipe`. A client must already provide a compatible recipe command/engine before these instructions apply; do not invent that import or assume installing Crafty enables recipes.
-
-Treat a recipe as a versioned runbook: executable steps in YAML front matter, purpose and operational caveats in Markdown prose. Keep domain operations in commands so they remain independently callable, testable, and composable.
-
-### Front matter and composition
-
-A recipe file starts with `---`, contains the front matter below, then closes with `---`. Only `name`, `description`, `params`, and `steps` are allowed at the top level.
-
-This example composes the `greet` command above. Save it as `recipes/greeting-workflow.md` in a client that provides both commands:
-
-```markdown
----
-name: greeting-workflow
-description: Greet a subject in Portuguese, then reuse the greeting
-params:
-  subject:
-    default: Ada
-    description: Subject to greet
-steps:
-  - id: first
-    run: [greet, "{{params.subject}}", --language, pt, --json]
-  - id: followup
-    run: [greet, "{{steps.first.json.data.greeting}}", --json]
----
-# Greeting workflow
-
-Both steps are local and read-only. The second step consumes the first
-step's JSON result as one argument, including its spaces.
+export default createSkillsPlugin({
+  skillsDir: new URL('../skills/', import.meta.url),
+})
 ```
 
-- A parameter is a scalar default, or a table containing only `default` and/or `description`. Without a default it requires `--param name=value`; overrides are strings. Unknown or missing parameters are usage errors.
-- Each step has a unique nonempty `id` and a `run` string or argument list. Optional `quiet` and `continue_on_error` fields are booleans; other fields are rejected.
-- Prefer argument lists for unambiguous boundaries. String form supports tokenizing quotes and escapes, not shell execution. No pipes, redirects, glob expansion, environment assignments, or `&&`.
-- Substitution happens after tokenization, within each argument. A value containing spaces remains one argument. Commands that explicitly invoke a shell still require their own input-safety policy.
-- Use bare command roots in recipes for portability. The ops engine strips a leading `ops`, not arbitrary custom CLI names.
-- Steps dispatch in-process through the same command executor as direct invocations, including parsing and hooks. They must reference known commands and cannot invoke another recipe.
-- Unknown keys, invalid commands, duplicate step IDs, unknown parameters, and forward step references fail recipe loading. Do not hide a malformed recipe behind tolerant execution.
+Place skills at `skills/<name>/SKILL.md`, with the directory matching the YAML frontmatter `name` and a non-empty `description`. The plugin's `list` and `show` routes validate and read local skill files without a subprocess or network access. A root `SKILL.md` is unsupported; `internal: true` hides a skill from listing, showing, and installation; symbolic links anywhere inside a skill directory are rejected. The explicit `install` route delegates to `bun x --bun skills@1.7.1 add <source>`; a real install may download the pinned package on first use. It is a client workflow convenience, not a skill execution runtime. Keep the source anchored to the client module, and keep client-specific skills out of the framework package artifact. Project installs use the invocation working directory; global installs require the explicit `--global` option. For actual JSON or non-interactive installs, select skills and agents explicitly and pass `--yes`. Non-interactive installs request and validate upstream JSON results before reporting success. A skill can describe decisions and stopping conditions, but it does not authorize external writes by itself.
 
-| Placeholder | Value |
-| --- | --- |
-| `{{params.subject}}` | Declared parameter, resolved from override or default |
-| `{{steps.first.stdout}}` | Earlier step's captured stdout, trailing whitespace trimmed |
-| `{{steps.first.json.data.greeting}}` | Field from an earlier step's JSON stdout; give that step `--json` |
-| `{{steps.first.json.data.rows.0}}` | Dotted JSON traversal, including numeric array indices |
-| `{{steps.first.exit_code}}` | Earlier step's exit code |
-| `\{{` | Literal opening braces |
+## Describe reusable CLI workflows as skills
 
-### Discovery, execution, and verification
+When a workflow coordinates one or more CLIs, document it as an agent skill that guides the agent through the installed executables. A skill can select commands, explain the sequence, capture decision points, and state when to stop; it does not make arbitrary CLI calls deterministic or guarantee unattended execution.
 
-The UQ infrastructure client's discovery precedence is: repeated `--recipes-dir` directories in argument order, `$OPS_RECIPES_DIR`, `~/.config/ops-cli/recipes`, then its shipped `recipes/`. Directories are scanned recursively for Markdown files. Across directories the first recipe name wins; duplicate names within one directory are errors. Missing directories are skipped. These paths/environment names are client policy, not framework defaults.
+For a workflow skill:
 
-Use the actual client's CLI name:
+- Identify the executable and discover its supported commands and options from `--help` or the CLI's own docs. Treat those as the interface instead of assuming private APIs.
+- Preserve argument boundaries with argv arrays or explicit argument lists. Avoid shell composition unless the task requires it and the CLI invocation explicitly uses a shell.
+- Explain how to parse `--json` output, including its success/error envelope, result data, and process exit status. For Crafty output, inspect `ok`, `data`, `meta`, and `error`. Do not treat a nonzero exit as success because stdout contains parseable JSON.
+- State required dependencies, inputs, write effects, and stopping conditions. Include confirmation flags only for writes authorized by the user or an explicitly invoked skill; a workflow alone does not grant authorization. Stop on failures unless the workflow names a specific recoverable condition and response.
+- Use the skill for interactive decisions and checks. Add an ordinary script only when unattended repetition or reproducible execution is required and the steps can be made deterministic; keep its dependencies and failure behavior explicit.
 
-```bash
-bun run cli.ts recipe list --recipes-dir ./recipes
-bun run cli.ts recipe show greeting-workflow --recipes-dir ./recipes
-bun run cli.ts recipe run greeting-workflow --recipes-dir ./recipes --param 'subject=Ada Lovelace' --dry-run
-bun run cli.ts recipe run greeting-workflow --recipes-dir ./recipes --param 'subject=Ada Lovelace' --json
-```
+Do not add a second workflow runtime to Crafty for sequencing CLI commands. The framework's in-process `run()` and `runCommand()` APIs remain available for generic nested composition within a client; its registry and output sink are process-global, so use one client at a time in a process.
 
-`--dry-run` resolves parameters but leaves earlier-step placeholders literal; it executes nothing and cannot prove a later JSON path exists. Follow it with a safe real execution. For this example, expect two successful steps; their captured JSON results contain `Olá, Ada Lovelace` and `Hello, Olá, Ada Lovelace`, respectively.
+## Verify the consumer-facing behavior
 
-Execution stops at the first failed step and returns its exit status unless that step declares `continue_on_error: true`. Tolerated failures remain recorded, with their IDs in the recipe envelope's `meta.tolerated`; an entirely successful/tolerated run exits 0. Use tolerance only for explicitly nonfatal operations, not to disguise a broken workflow. `quiet` suppresses human-mode output echo, not result capture.
-
-Recipes do not bypass write confirmation. Recipe-level `--yes` is passed only to commands that declare a `yes` option. Do not add it automatically; document write effects and verify read-only paths or isolated fixtures first.
-
-Inspect the recipe envelope's step `argv`, `exit_code`, and `stdout`, not just the aggregate status. Also check a missing/unknown parameter and relevant failure behavior. Use isolated recipe directories and home/environment settings for smoke runs: `--recipes-dir` changes precedence but does not disable scanning fallback directories.
-
-## Verify the consumer-visible behavior
-
-1. Run the actual client entrypoint, not only an imported handler. Check root/nested help, the intended result, JSON output, and at least one invalid input with its exit status.
-2. For the example: `greet Ada --language pt --shout --json` returns a success envelope with `data.greeting` equal to `OLÁ, ADA`; `greet Ada --language fr --json` exits 2 with a usage error. The `hello` alias should invoke the same route.
-3. If completion is enabled, query its metadata, for example `bun run cli.ts completion query --index 4 -- toolbox greet Ada --language ''`. Expect the declared language values without running the greeting handler.
-4. Run the client's existing typecheck and relevant behavioral tests. In this repository, `bun run typecheck` checks both workspaces. Keep regression tests for uncertain behavior, boundaries, errors, or lifecycle cleanup—not source wording or wiring.
-5. Update the client's usage/config/recipe documentation for changed contracts. Remove temporary smoke fixtures and never change real credentials, infrastructure, shell startup files, or global executable links just to verify an example.
+Run the actual client entrypoint. Check root and nested help, a successful result in human and JSON modes, an invalid invocation with its exit status, and completion metadata when enabled. For a skills catalog, verify list/show and installer dry-run without launching a real install. Use isolated fixtures for writes or external services. Keep tests for meaningful boundaries, failure behavior, and cleanup, and update the client's command and workflow documentation when its contract changes.
