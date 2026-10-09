@@ -23,6 +23,8 @@ export {
   runCommand,
   type CommandHandler,
   type CommandHook,
+  type CommandStartupContext,
+  type CommandStartupHook,
   type CommandModule,
   type CommandNode,
   type McpCommandPolicy,

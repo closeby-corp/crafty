@@ -10,6 +10,15 @@ export type CommandHandler = (ctx: Ctx) => number | void | Promise<number | void
 export type CommandHook = (ctx: Ctx) => void | Promise<void>
 export type McpCommandPolicy = 'read' | 'write' | 'hidden'
 
+export interface CommandStartupContext {
+  argv: readonly string[]
+  program: string
+  commandsDir: string | URL
+  interactive: boolean
+}
+
+export type CommandStartupHook = (ctx: CommandStartupContext) => void | Promise<void>
+
 export interface CommandNode {
   summary?: string
   usage?: string[]
@@ -29,6 +38,8 @@ export interface CommandNode {
 
 export interface CommandModule extends CommandNode {
   name?: string
+  /** Optional client plugin hook, run after discovery and before command dispatch. */
+  onStart?: CommandStartupHook
 }
 
 export interface RegisteredCommand {
@@ -36,6 +47,7 @@ export interface RegisteredCommand {
   definition: CommandModule
   options: OptionSpec[]
   repeatable: string[]
+  onStart?: CommandStartupHook
 }
 
 export const FRAMEWORK_OPTIONS: OptionSpec[] = [
@@ -57,6 +69,7 @@ function staticName(name: string): boolean {
 /** Validate and normalize function children once, without changing the supplied module. */
 export function prepareCommand(name: string, definition: CommandModule): RegisteredCommand {
   const fail = (message: string): never => { throw new OpsError(`${name}: ${message}`, 'internal') }
+  if (definition.onStart !== undefined && typeof definition.onStart !== 'function') fail('onStart must be callable')
   if (!staticName(name) || name === 'help') fail('invalid or reserved root name')
   const options = new Map<string, OptionSpec>()
   const shorts = new Map<string, string>()
@@ -145,7 +158,13 @@ export function prepareCommand(name: string, definition: CommandModule): Registe
   const normalized = visit(definition, new Set(), false, true)
   const rootNames = [name, ...(normalized.aliases ?? [])]
   if (new Set(rootNames).size !== rootNames.length) fail('colliding root name or aliases')
-  return { name, definition: normalized, options: [...options.values()], repeatable: [...repeatable] }
+  return {
+    name,
+    definition: normalized,
+    options: [...options.values()],
+    repeatable: [...repeatable],
+    ...(definition.onStart ? { onStart: definition.onStart } : {}),
+  }
 }
 
 function inheritedOptions(nodes: CommandNode[]): OptionSpec[] {

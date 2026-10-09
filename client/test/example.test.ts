@@ -26,11 +26,11 @@ const data = (result: Awaited<ReturnType<typeof capture>>): Record<string, unkno
 
 describe('the example client', () => {
   test('discovers the command modules in its own commands/ directory', async () => {
-    expect(commands().map((entry) => entry.name).sort()).toEqual(['completion', 'demo', 'echo', 'mcp', 'skills', 'version'])
+    expect(commands().map((entry) => entry.name).sort()).toEqual(['completion', 'demo', 'echo', 'mcp', 'skills', 'update', 'version'])
     const help = await capture(['--help'])
     expect(help.code).toBe(0)
     expect(help.stdout).toStartWith('crafty <command> [options]\n')
-    for (const name of ['completion', 'demo', 'echo', 'mcp', 'skills', 'version']) expect(help.stdout).toContain(name)
+    for (const name of ['completion', 'demo', 'echo', 'mcp', 'skills', 'update', 'version']) expect(help.stdout).toContain(name)
   })
 
   test('echo joins positionals and honors flags and repeatable options', async () => {

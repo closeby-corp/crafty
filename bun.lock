@@ -21,7 +21,7 @@
     },
     "framework": {
       "name": "crafty",
-      "version": "0.7.0",
+      "version": "0.8.0",
       "dependencies": {
         "@modelcontextprotocol/server": "^2.3.1",
       },

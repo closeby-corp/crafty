@@ -8,7 +8,7 @@ import { errorMessage, OpsError } from './errors.ts'
 import { redactString } from './log.ts'
 
 /** Discover direct TypeScript command files in the client-supplied directory. */
-export async function loadCommands(directory: string | URL): Promise<void> {
+export async function loadCommands(directory: string | URL): Promise<RegisteredCommand[]> {
   const absolute = resolve(directory instanceof URL ? fileURLToPath(directory) : directory)
   let files: string[]
   try {
@@ -45,4 +45,5 @@ export async function loadCommands(directory: string | URL): Promise<void> {
     }
   }
   setCommands(loaded)
+  return loaded
 }

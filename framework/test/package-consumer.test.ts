@@ -57,6 +57,7 @@ describe('installed package consumer', () => {
       import * as framework from 'crafty'
       import completion from 'crafty/plugins/completion'
       import { createSkillsPlugin } from 'crafty/plugins/skills'
+      import { createUpdatePlugin } from 'crafty/plugins/update'
       import { dirname, resolve } from 'node:path'
       import { fileURLToPath } from 'node:url'
       const entry = fileURLToPath(import.meta.resolve('crafty'))
@@ -67,6 +68,7 @@ describe('installed package consumer', () => {
         exports: ['start', 'loadCommands', 'log', 'registerSecret', 'OpsError'].every((key) => key in framework),
         completion: typeof completion === 'object',
         skillsPlugin: typeof createSkillsPlugin === 'function',
+        updatePlugin: typeof createUpdatePlugin === 'function',
       }))
     `)
     const inspected = runBun([inspectPath], unrelatedCwd)
@@ -79,10 +81,12 @@ describe('installed package consumer', () => {
       exports: boolean
       completion: boolean
       skillsPlugin: boolean
+      updatePlugin: boolean
     }
     expect(details.exports).toBe(true)
     expect(details.completion).toBe(true)
     expect(details.skillsPlugin).toBe(true)
+    expect(details.updatePlugin).toBe(true)
     const relativePackagePath = relative(join(consumerDir, 'node_modules'), details.packageRoot)
     expect(isAbsolute(relativePackagePath) || relativePackagePath === '..' || relativePackagePath.startsWith(`..${process.platform === 'win32' ? '\\' : '/'}`)).toBe(false)
     expect(resolve(details.entry)).not.toBe(resolve(frameworkRoot, 'src/index.ts'))

@@ -9,7 +9,7 @@ The `crafty` package contains the framework and its [authoring skill](SKILL.md).
 Crafty is not published to npm. Install the versioned GitHub release asset in your client repository:
 
 ```bash
-bun add https://github.com/closeby-corp/crafty/releases/download/v0.7.0/crafty-0.7.0.tgz
+bun add https://github.com/closeby-corp/crafty/releases/download/v0.8.0/crafty-0.8.0.tgz
 ```
 
 Commit the dependency manifest, `bun.lock`, command files, and client entrypoint. The manifest and lockfile select the installed framework version; Git versions the client commands.
@@ -34,6 +34,25 @@ The generated `skills list` and `skills show <name>` routes read and validate th
 The catalog uses only flat `skills/<name>/SKILL.md` entries; a root `SKILL.md` is unsupported. A boolean `internal: true` frontmatter field hides a skill from listing, showing, and installation. Symbolic links in skill directories, documents, and resources are rejected.
 
 The configured source directory is resolved from the client command module, not the current working directory. Skills belong to the client that owns the executable and should be included only in a distribution of that client. Keep them out of the framework package allowlist: they describe that client's workflows and commands. Skill content guides an agent; it does not extend Crafty's execution runtime or authorize writes.
+
+## Optional client update plugin
+
+Clients can add `crafty/plugins/update` to update the Git repository that owns their CLI. Set `repositoryDir` explicitly from the client command module so the target does not depend on the shell's current directory:
+
+```ts
+// commands/update.ts
+import { createUpdatePlugin } from 'crafty/plugins/update'
+
+export default createUpdatePlugin({
+  repositoryDir: new URL('../../', import.meta.url),
+})
+```
+
+`crafty update` refuses to run with tracked or untracked changes and uses Git's fast-forward-only pull for the current branch's configured upstream. It does not stash, create merge commits, reset, install dependencies, or restart the process. If the repository's dependency manifest or lockfile changed, install dependencies yourself; restart the CLI to load updated command code. `crafty update --check` checks immediately without changing the working tree.
+
+When enabled, an interactive invocation checks for updates at most once per day by default and writes a notice to stderr. Set `autoCheck: false` or change `checkIntervalMs` to customize that behavior. The check has a three-second total time budget; failures and timeouts do not fail the command being run. `update --check` gets a longer, 15-second budget. For a `github.com` remote, the plugin tries `gh api` first, using the installed GitHub CLI's existing authentication; if that fails or cannot compare the local commit, it falls back to Git fetch. Other Git remotes use Git fetch. GitHub Enterprise hosts are not detected automatically yet. The notification cache is stored in the user's cache directory.
+
+The update route is marked `mcp: 'write'`, so the MCP server keeps it blocked unless the server operator explicitly enables writes. Ordinary MCP arguments cannot authorize the repository update.
 
 ## Optional HTTP MCP plugin
 
@@ -214,10 +233,11 @@ The `completion query --index <n> -- <words...>` route is the shell adapter's ma
 
 ## Public API
 
-- `start({ commandsDir, argv?, program? }): Promise<number>` discovers commands and runs the invocation. `commandsDir` accepts a filesystem path or file URL; `argv` defaults to process arguments and `program` to `crafty`. The caller sets `process.exitCode`.
-- `CommandModule`, `CommandNode`, `CommandHandler`, `CommandHook`, `Ctx`, and `OptionSpec` describe commands and their invocation context.
+- `start({ commandsDir, argv?, program? }): Promise<number>` discovers commands, runs top-level `onStart` hooks in command-file order, then dispatches the invocation. `commandsDir` accepts a filesystem path or file URL; `argv` defaults to process arguments and `program` to `crafty`. The caller sets `process.exitCode`.
+- `CommandModule`, `CommandNode`, `CommandHandler`, `CommandHook`, `CommandStartupHook`, `CommandStartupContext`, `Ctx`, and `OptionSpec` describe commands and their invocation context. Startup hooks receive argv, program, command-directory, and terminal context.
 - `CompletionContext`, `CompletionProvider`, and `ValueCompletion` describe client-owned lazy value completion.
 - `createSkillsPlugin({ skillsDir })` builds client-owned list, show, and explicit install routes from a local skill source.
+- `createUpdatePlugin({ repositoryDir, checkIntervalMs?, autoCheck?, cacheDirectory? })` adds a safe Git updater and optional interactive notices; updater work is anchored to the configured repository.
 - `createMcpPlugin()` builds the opt-in `mcp serve` command from the active client command registry.
 - `emitResult`, envelope/table helpers, `flag`, `option`, argument-value helpers, `write`, and `writeErr` provide the existing output contract.
 - `OpsError`, `ConfigError`, `usageError`, error classification, and secret-redaction helpers provide shared diagnostics.
@@ -241,6 +261,11 @@ bun pm pack
 `bun run test` includes a packed-consumer test: it creates a tarball, installs it in a temporary client, and exercises its public imports, command discovery, JSON output, errors, logging, and packaged skill from another working directory. CI runs install, tests, and typecheck on Ubuntu, macOS, and Windows with Bun 1.4.2. Bash completion integration is POSIX-only and runs with Bash 4+; core and packed-consumer tests also run on Windows.
 
 The package allowlist includes framework `src/` and `SKILL.md`; the standard manifest and README are also included. It excludes the client workspace and all client-owned skills and integrations. No compiled binary or adjacent-source-tree layout is required.
+
+## 0.8.0 changes
+
+- Added the optional client updater with clean-worktree checks, fast-forward-only pulls, automatic notices, and GitHub CLI comparison support.
+- Added top-level command startup hooks for opt-in plugins.
 
 ## 0.7.0 changes
 

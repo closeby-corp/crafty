@@ -6,13 +6,13 @@ A Bun command framework with client-owned TypeScript commands. This repository c
 crafty/
 ├── package.json       # private workspace container
 ├── bun.lock           # shared dependency lockfile
-├── framework/         # installable crafty package, version 0.7.0
+├── framework/         # installable crafty package, version 0.8.0
 │   ├── SKILL.md       # packaged command and CLI workflow authoring guidance
 │   ├── src/
 │   └── test/
 └── client/            # small example client
     ├── cli.ts         # executable named crafty
-    ├── commands/      # demo, echo, version + optional completion, skills and MCP plugins
+    ├── commands/      # demo, echo, version + optional completion, skills, updates and MCP plugins
     ├── skills/        # client-owned agent workflow skills
     ├── lib/           # helper, kept outside commands/ so discovery ignores it
     └── test/
@@ -20,7 +20,7 @@ crafty/
 
 Requires Bun >= 1.4. The framework supplies command routing, arguments, help, lifecycle hooks, context, and structured output/errors. It ships no integration commands or executable: a client owns those and imports the framework through its installed `crafty` dependency.
 
-The UQ infrastructure client runs in `~/uq/uq-infra-support/infra/services/ops-cli`, with the executable name `ops`. Its command files are owned by that repository and its framework dependency is a pinned package artifact — not a workspace link to this checkout. The `client/` here is an example client: it exercises command discovery, nested routes, a captured parameter, lifecycle hooks, output, and optional completion, skills, and HTTP MCP plugins. It also carries a client-owned workflow skill for using the example CLI.
+The UQ infrastructure client runs in `~/uq/uq-infra-support/infra/services/ops-cli`, with the executable name `ops`. Its command files are owned by that repository and its framework dependency is a pinned package artifact — not a workspace link to this checkout. The `client/` here is an example client: it exercises command discovery, nested routes, a captured parameter, lifecycle hooks, output, and optional completion, skills, repository updates, and HTTP MCP plugins. It also carries a client-owned workflow skill for using the example CLI.
 
 ## Run and link the example client
 
@@ -73,13 +73,17 @@ Target handlers and lifecycle hooks do not run during metadata lookup, but comma
 
 The example client opts into `crafty/plugins/mcp` through `client/commands/mcp.ts`. Run `crafty mcp serve` to expose its configured leaf commands at `http://127.0.0.1:8787/mcp`. The server uses the same handlers and selected config path as the CLI. Non-loopback bindings require bearer auth, TLS, and Host allowlisting; unclassified and write routes require an explicit server environment setting. See the [framework MCP contract](framework/README.md#optional-http-mcp-plugin) for route policies and tool schemas.
 
+## Update a client CLI repository
+
+The example opts into `crafty/plugins/update` in `client/commands/update.ts`. An independent client should point `repositoryDir` at the Git repository that owns its executable and commands. `crafty update --check` reports available commits, and `crafty update` fast-forwards the configured upstream only when the checkout is clean. Interactive commands show a throttled update notice; GitHub checks use `gh api` when possible. The updater does not install dependencies or restart the process. See the [framework update contract](framework/README.md#optional-client-update-plugin) for configuration and safeguards.
+
 
 ## Install Crafty in another client
 
 Only the framework is packaged. Install the versioned GitHub release asset:
 
 ```bash
-bun add https://github.com/closeby-corp/crafty/releases/download/v0.7.0/crafty-0.7.0.tgz
+bun add https://github.com/closeby-corp/crafty/releases/download/v0.8.0/crafty-0.8.0.tgz
 ```
 
 Crafty is not published to npm. The repository root is a private workspace container, not the framework package. See the [framework README](framework/README.md) for the minimal client entrypoint, public API, and command contract. See the [example client README](client/README.md) for a client using that contract.
@@ -92,12 +96,18 @@ For agent-assisted command authoring or workflows built around client CLIs, use 
 bun install --frozen-lockfile
 bun run test          # framework and example-client suites
 bun run typecheck     # framework and example-client TypeScript checks
-bun run pack          # framework/crafty-0.7.0.tgz
+bun run pack          # framework/crafty-0.8.0.tgz
 ```
 
 The framework package's allowlist contains `src/` and `SKILL.md`; standard package metadata and its README are included. The example client and its client-only skills, assets, and dependencies are excluded from the framework artifact. Client releases that distribute their own CLI may include that client's `skills/` resources. The old compiled launcher and source-tree installation layout are removed; clients execute through Bun and their installed framework.
 
 `bun run test` includes a packed-consumer check that installs the tarball in a temporary client and exercises the public package from another working directory. CI runs install, tests, and typecheck on Ubuntu, macOS, and Windows with Bun 1.4.2. Bash completion integration is POSIX-only and runs with Bash 4+; core and packed-consumer checks also run on Windows.
+
+## 0.8.0
+
+- Added the opt-in `crafty/plugins/update` updater with clean-worktree checks, fast-forward-only Git updates, rate-limited interactive notices, and optional GitHub CLI comparisons.
+- Added command-module startup hooks for opt-in plugins that need to inspect each CLI invocation.
+- Verified with 109 framework tests, 10 example-client tests, both typechecks, and the packed-consumer check.
 
 ## 0.7.0
 

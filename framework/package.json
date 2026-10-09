@@ -1,6 +1,6 @@
 {
   "name": "crafty",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "Bun command framework for client-owned TypeScript commands",
   "repository": {
     "type": "git",
@@ -12,6 +12,7 @@
     ".": "./src/index.ts",
     "./plugins/completion": "./src/plugins/completion.ts",
     "./plugins/skills": "./src/plugins/skills.ts",
+    "./plugins/update": "./src/plugins/update.ts",
     "./plugins/mcp": "./src/plugins/mcp.ts",
     "./SKILL.md": "./SKILL.md"
   },

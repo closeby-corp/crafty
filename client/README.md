@@ -1,8 +1,8 @@
 # crafty example client
 
-A small client for the [Crafty framework](../framework/README.md), with six discovered commands, one helper,
+A small client for the [Crafty framework](../framework/README.md), with seven discovered commands, one helper,
 and a client-owned workflow skill. It exercises framework discovery, nested routes, a captured parameter,
-lifecycle hooks, structured output, and the optional completion, skills, and HTTP MCP plugins.
+lifecycle hooks, structured output, and the optional completion, skills, updates, and HTTP MCP plugins.
 
 ```text
 client/
@@ -13,6 +13,7 @@ client/
 │   ├── echo.ts                # positionals, flag, repeatable option, raw -- tail
 │   ├── mcp.ts                 # opts into crafty mcp serve over Streamable HTTP
 │   ├── skills.ts              # configures crafty/plugins/skills with this client's skill source
+│   ├── update.ts              # configures crafty/plugins/update for this repository
 │   └── version.ts             # human and --json renderings of one value
 ├── skills/
 │   └── crafty-example-workflow/SKILL.md
@@ -31,6 +32,7 @@ bun run cli --help
 bun run cli demo task build show extra --json
 bun run cli echo hello --upper --tag one --tag=two -- --not-a-flag
 bun run cli version
+bun run cli update --check
 bun run cli mcp serve --help
 ```
 
@@ -50,6 +52,7 @@ next invocation.
 - **`completion`** — a one-line re-export of `crafty/plugins/completion`; delete the file to drop the command.
 - **`mcp`** — opts into `crafty/plugins/mcp`; `crafty mcp serve` listens on `127.0.0.1:8787/mcp` by default and exposes the other configured leaf routes as MCP tools. The `mcp` server-control routes are not exposed to clients.
 - **`skills`** — opts this client into static skill discovery and explicit installation through the pinned Skills CLI. Its catalog comes from this client's `skills/` directory.
+- **`update`** — opts into a fast-forward-only update of this example's containing repository. It refuses local changes and checks for updates at most daily during interactive use. Because this example lives inside the Crafty repository, it points to that repository root; independent clients should point at their own source checkout.
 - **`skills/crafty-example-workflow`** — demonstrates using the installed executable, inspecting help, handling JSON envelopes and exit codes, and stopping on unexpected errors.
 
 ## Client workflow skills

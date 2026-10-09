@@ -2,7 +2,7 @@
   "name": "crafty-example",
   "version": "0.1.0",
   "private": true,
-  "description": "Example Crafty client: discovery, routes, lifecycle hooks, output, completion, skills and HTTP MCP plugins",
+  "description": "Example Crafty client: discovery, routes, lifecycle hooks, output, completion, skills, updates and HTTP MCP plugins",
   "type": "module",
   "bin": { "crafty": "./cli.ts" },
   "engines": { "bun": ">=1.4.0" },
