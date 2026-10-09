@@ -14,6 +14,7 @@ const mark = (ctx: Ctx, text: string): void => {
 export default {
   name: 'demo',
   summary: 'Nested routes, a captured parameter and lifecycle hooks',
+  mcp: 'read',
   init(ctx) {
     mark(ctx, 'init')
   },

@@ -8,6 +8,7 @@ import { readVersion } from '../lib/manifest.ts'
 export default {
   name: 'version',
   summary: 'Print this client version and the Bun it runs on',
+  mcp: 'read',
   run: async (ctx) => {
     const version = await readVersion()
     if (!ctx.json) {

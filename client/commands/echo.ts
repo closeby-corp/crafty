@@ -8,6 +8,7 @@ import { emitResult, flag, write, type CommandModule } from 'crafty'
 export default {
   name: 'echo',
   summary: 'Print the words it was given',
+  mcp: 'read',
   options: [
     { name: 'upper', type: 'boolean' },
     { name: 'tag', type: 'string', repeatable: true },

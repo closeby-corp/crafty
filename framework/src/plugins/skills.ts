@@ -191,6 +191,7 @@ export function createSkillsPlugin({ skillsDir }: { skillsDir: string | URL }): 
     commands: {
       list: {
         summary: 'List skills available in the configured local catalog',
+        mcp: 'read',
         async run(ctx) {
           noExtraInput(ctx)
           ctx.target = source
@@ -202,6 +203,7 @@ export function createSkillsPlugin({ skillsDir }: { skillsDir: string | URL }): 
       },
       show: {
         summary: 'Print one skill document',
+        mcp: 'read',
         async run(ctx) {
           if (ctx.positionals.length !== 1 || ctx.tail.length) throw usageError(`${ctx.path} requires exactly one skill name and no arguments after --`)
           ctx.target = source
@@ -212,6 +214,7 @@ export function createSkillsPlugin({ skillsDir }: { skillsDir: string | URL }): 
       },
       install: {
         summary: 'Install selected local skills with the pinned Skills CLI',
+        mcp: 'write',
         options,
         async run(ctx) {
           noExtraInput(ctx)

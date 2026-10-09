@@ -86,6 +86,22 @@ export default createSkillsPlugin({
 
 Place skills at `skills/<name>/SKILL.md`, with the directory matching the YAML frontmatter `name` and a non-empty `description`. The plugin's `list` and `show` routes validate and read local skill files without a subprocess or network access. A root `SKILL.md` is unsupported; `internal: true` hides a skill from listing, showing, and installation; symbolic links anywhere inside a skill directory are rejected. The explicit `install` route delegates to `bun x --bun skills@1.7.1 add <source>`; a real install may download the pinned package on first use. It is a client workflow convenience, not a skill execution runtime. Keep the source anchored to the client module, and keep client-specific skills out of the framework package artifact. Project installs use the invocation working directory; global installs require the explicit `--global` option. For actual JSON or non-interactive installs, select skills and agents explicitly and pass `--yes`. Non-interactive installs request and validate upstream JSON results before reporting success. A skill can describe decisions and stopping conditions, but it does not authorize external writes by itself.
 
+## Expose client commands over MCP
+
+For an optional HTTP MCP server over the same configured command tree, register `crafty/plugins/mcp` in `commands/mcp.ts`:
+
+```ts
+import { createMcpPlugin } from 'crafty/plugins/mcp'
+
+export default createMcpPlugin()
+```
+
+`crafty mcp serve` uses the official TypeScript SDK's Streamable HTTP handler and defaults to `127.0.0.1:8787/mcp`. Only literal loopback IP addresses avoid remote-bind safeguards; hostnames require authentication, TLS, and Host allowlisting. It calls the same handlers, hooks, and selected client configuration as the CLI. Tool inputs contain dynamic route values in `params`, free positional values in `args`, post-`--` values in `tail`, and declared non-sensitive flags in `options`. Repeatable string flags are arrays. Positional argument names, sensitivity, and required-option metadata are not part of Crafty's command model, so leave command-specific validation in the handler and do not accept secrets as positionals.
+
+Host and Origin headers are checked before MCP traffic is served. Add browser origins with repeated `--allowed-origin` URLs; configured schemes must match and ports are unrestricted. A non-loopback bind requires an allowlisted `--allowed-host`, a `CRAFTY_MCP_TOKEN` with at least 32 URL-safe characters, and a TLS cert/key pair. Store credentials in the server environment or client config; sensitive option values and `--config` paths are not exposed as tool inputs.
+
+Unclassified routes and write routes are blocked by default. Mark a known read-only route `mcp: 'read'` to expose it and publish read-only annotations; unclassified routes have no read/write annotation. Read/write policies inherit through descendants, so mark a parent read-only only when all its leaves are read-only. Mark a route `mcp: 'hidden'` to hide it and its descendants. Mark any route that can change host or remote state as `mcp: 'write'`; routes with `--yes` are also treated as writes. Writes and unclassified routes stay blocked unless the server operator sets `CRAFTY_MCP_ALLOW_WRITES=1`. MCP arguments cannot set `yes`; the adapter adds that flag only under this server-level opt-in. This metadata is a client-author responsibility: arbitrary handler side effects cannot be inferred. The plugin does not sandbox code. Crafty's `write`, `writeErr`, logger, config, and secret scopes are isolated per tool call, but direct process/console writes and client-owned shared mutable state are not. Tool inputs are capped at 4 MiB and 256 argument values; captured output is capped at 1 MiB stdout and 128 KiB diagnostics.
+
 ## Describe reusable CLI workflows as skills
 
 When a workflow coordinates one or more CLIs, document it as an agent skill that guides the agent through the installed executables. A skill can select commands, explain the sequence, capture decision points, and state when to stop; it does not make arbitrary CLI calls deterministic or guarantee unattended execution.
@@ -98,7 +114,7 @@ For a workflow skill:
 - State required dependencies, inputs, write effects, and stopping conditions. Include confirmation flags only for writes authorized by the user or an explicitly invoked skill; a workflow alone does not grant authorization. Stop on failures unless the workflow names a specific recoverable condition and response.
 - Use the skill for interactive decisions and checks. Add an ordinary script only when unattended repetition or reproducible execution is required and the steps can be made deterministic; keep its dependencies and failure behavior explicit.
 
-Do not add a second workflow runtime to Crafty for sequencing CLI commands. The framework's in-process `run()` and `runCommand()` APIs remain available for generic nested composition within a client; its registry and output sink are process-global, so use one client at a time in a process.
+Do not add a second workflow runtime to Crafty for sequencing CLI commands. The framework's in-process `run()` and `runCommand()` APIs remain available for generic nested composition within a client. The command registry and fallback output sink remain process-global; the MCP plugin gives each tool call a separate output, configuration, and secret scope, while client-owned shared mutable state stays the client's responsibility.
 
 ## Verify the consumer-facing behavior
 

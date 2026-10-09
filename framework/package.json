@@ -1,20 +1,33 @@
 {
   "name": "crafty",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "Bun command framework for client-owned TypeScript commands",
-  "repository": { "type": "git", "url": "git+https://github.com/closeby-corp/crafty.git", "directory": "framework" },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/closeby-corp/crafty.git",
+    "directory": "framework"
+  },
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
     "./plugins/completion": "./src/plugins/completion.ts",
     "./plugins/skills": "./src/plugins/skills.ts",
+    "./plugins/mcp": "./src/plugins/mcp.ts",
     "./SKILL.md": "./SKILL.md"
   },
   "files": ["src", "SKILL.md"],
-  "engines": { "bun": ">=1.4.0" },
+  "engines": {
+    "bun": ">=1.4.0"
+  },
   "scripts": {
     "test": "bun test ./test",
     "typecheck": "tsc --noEmit"
   },
-  "devDependencies": { "@types/bun": "latest", "typescript": "^5.9.0" }
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^5.9.0"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/server": "^2.3.1"
+  }
 }

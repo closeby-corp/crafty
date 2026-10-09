@@ -1,18 +1,22 @@
 import type { Ctx, CommandInfo } from './output.ts'
 import type { OptionSpec, ValueCompletion } from './cli.ts'
-import { extractGlobalOptions, flag, parseCommandArgs, PROGRAM, setOutputSink, withCliConfigScope, write, writeErr } from './cli.ts'
+import { extractGlobalOptions, flag, parseCommandArgs, PROGRAM, withCliConfigScope, write, writeErr } from './cli.ts'
+import { withOutputSinks } from './io.ts'
 import { GLOBAL_OPTIONS, makeCtx, pullRepeatable, reportFailure } from './output.ts'
 import { errorMessage, OpsError, usageError } from './errors.ts'
-import { redactString, registerSecret } from './log.ts'
+import { redactString, registerSecret, withSecretScope } from './log.ts'
 
 export type CommandHandler = (ctx: Ctx) => number | void | Promise<number | void>
 export type CommandHook = (ctx: Ctx) => void | Promise<void>
+export type McpCommandPolicy = 'read' | 'write' | 'hidden'
 
 export interface CommandNode {
   summary?: string
   usage?: string[]
   aliases?: string[]
   source?: string
+  /** MCP exposure policy: attest a read-only route, require host-authorized writes, or hide it. */
+  mcp?: McpCommandPolicy
   options?: OptionSpec[]
   repeatable?: string[]
   /** Values for this node's :parameter when it is a dynamic child. */
@@ -96,6 +100,7 @@ export function prepareCommand(name: string, definition: CommandModule): Registe
     if (!Array.isArray(aliases) || aliases.some((alias) => !staticName(alias) || (root && alias === 'help'))) fail('invalid or reserved alias')
     if (dynamic && aliases.length) fail('a parameter child cannot have aliases')
     if (value.commands !== undefined && !plainObject(value.commands)) fail('commands must be a plain object')
+    if (value.mcp !== undefined && value.mcp !== 'read' && value.mcp !== 'write' && value.mcp !== 'hidden') fail('mcp must be "read", "write", or "hidden"')
     const entries = Object.entries(value.commands ?? {})
     if (value.run !== undefined ? entries.length > 0 || value.commands !== undefined : entries.length === 0) {
       fail('a node must have either a handler or nonempty commands, not both')
@@ -323,25 +328,24 @@ async function runCommandInConfigScope(command: RegisteredCommand, argv: string[
 
   const entered: CommandNode[] = []
   const buffered: string[] = []
-  const previousSink = ctx.json ? setOutputSink((text) => buffered.push(text)) : undefined
   let failed = false
   let failure: unknown
   let status = 0
-  try {
-    for (const selected of nodes) {
-      entered.push(selected)
-      await selected.init?.(ctx)
-    }
-    const result = await node.run!(ctx)
-    if (result !== undefined) {
-      if (!Number.isInteger(result) || result < 0 || result > 255) throw new OpsError('handler returned an invalid exit code', 'internal')
-      status = result
-    }
-  } catch (error) {
-    failed = true
-    failure = error
-  } finally {
+  const invoke = async (): Promise<void> => {
     try {
+      for (const selected of nodes) {
+        entered.push(selected)
+        await selected.init?.(ctx)
+      }
+      const result = await node.run!(ctx)
+      if (result !== undefined) {
+        if (!Number.isInteger(result) || result < 0 || result > 255) throw new OpsError('handler returned an invalid exit code', 'internal')
+        status = result
+      }
+    } catch (error) {
+      failed = true
+      failure = error
+    } finally {
       for (let index = entered.length - 1; index >= 0; index -= 1) {
         try {
           await entered[index]!.destroy?.(ctx)
@@ -353,15 +357,15 @@ async function runCommandInConfigScope(command: RegisteredCommand, argv: string[
           }
         }
       }
-    } finally {
-      if (ctx.json) setOutputSink(previousSink!)
     }
   }
+  if (ctx.json) await withOutputSinks({ stdout: (text) => buffered.push(text) }, invoke)
+  else await invoke()
   if (failed) return reportFailure(failure, info, ctx, argv, program)
   if (ctx.json) for (const text of buffered) write(text)
   return status
 }
 
 export async function runCommand(command: RegisteredCommand, argv: string[], program = PROGRAM): Promise<number> {
-  return withCliConfigScope(() => runCommandInConfigScope(command, argv, program))
+  return withSecretScope(() => withCliConfigScope(() => runCommandInConfigScope(command, argv, program)))
 }

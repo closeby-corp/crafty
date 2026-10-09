@@ -1,8 +1,8 @@
 # crafty example client
 
-A small client for the [Crafty framework](../framework/README.md), with five discovered commands, one helper,
+A small client for the [Crafty framework](../framework/README.md), with six discovered commands, one helper,
 and a client-owned workflow skill. It exercises framework discovery, nested routes, a captured parameter,
-lifecycle hooks, structured output, and the optional completion and skills plugins.
+lifecycle hooks, structured output, and the optional completion, skills, and HTTP MCP plugins.
 
 ```text
 client/
@@ -11,6 +11,7 @@ client/
 │   ├── completion.ts          # re-exports crafty/plugins/completion
 │   ├── demo.ts                # nested route, :parameter, init/destroy hooks, ctx.state
 │   ├── echo.ts                # positionals, flag, repeatable option, raw -- tail
+│   ├── mcp.ts                 # opts into crafty mcp serve over Streamable HTTP
 │   ├── skills.ts              # configures crafty/plugins/skills with this client's skill source
 │   └── version.ts             # human and --json renderings of one value
 ├── skills/
@@ -30,6 +31,7 @@ bun run cli --help
 bun run cli demo task build show extra --json
 bun run cli echo hello --upper --tag one --tag=two -- --not-a-flag
 bun run cli version
+bun run cli mcp serve --help
 ```
 
 `bun link` exposes the executable named in `bin` (here `crafty`); the entrypoint resolves `commands/` relative
@@ -46,6 +48,7 @@ next invocation.
 - **`version`** — one handler, two renderings: `emitResult` prints the envelope under `--json` and a plain
   string otherwise. It reads its version through `lib/manifest.ts`.
 - **`completion`** — a one-line re-export of `crafty/plugins/completion`; delete the file to drop the command.
+- **`mcp`** — opts into `crafty/plugins/mcp`; `crafty mcp serve` listens on `127.0.0.1:8787/mcp` by default and exposes the other configured leaf routes as MCP tools. The `mcp` server-control routes are not exposed to clients.
 - **`skills`** — opts this client into static skill discovery and explicit installation through the pinned Skills CLI. Its catalog comes from this client's `skills/` directory.
 - **`skills/crafty-example-workflow`** — demonstrates using the installed executable, inspecting help, handling JSON envelopes and exit codes, and stopping on unexpected errors.
 

@@ -25,6 +25,7 @@ export {
   type CommandHook,
   type CommandModule,
   type CommandNode,
+  type McpCommandPolicy,
   type RegisteredCommand,
 } from './command.ts'
 export * from './output.ts'

@@ -1,16 +1,34 @@
+import { AsyncLocalStorage } from 'node:async_hooks'
+import { writeError } from './io.ts'
+
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error'
 
 const knownSecrets = new Set<string>()
+const secretScope = new AsyncLocalStorage<Set<string>>()
 const secretKeyPattern = /token|secret|password|credential|authorization|api[_-]?key/i
 
 /** Register a non-empty value that must never appear in logs. */
 export function registerSecret(value: string | undefined | null): void {
-  if (value) knownSecrets.add(value)
+  if (!value) return
+  const local = secretScope.getStore()
+  if (local) local.add(value)
+  else knownSecrets.add(value)
+}
+
+/** Keep nested calls in one invocation on its current secret set. */
+export function withSecretScope<T>(callback: () => T): T {
+  return secretScope.run(secretScope.getStore() ?? new Set(knownSecrets), callback)
+}
+
+/** Start an independent invocation, even when the caller has an ambient scope. */
+export function withIsolatedSecretScope<T>(callback: () => T): T {
+  return secretScope.run(new Set(knownSecrets), callback)
 }
 
 export function redactString(text: string): string {
   let out = text
-  for (const secret of [...knownSecrets].sort((a, b) => b.length - a.length)) {
+  const secrets = new Set([...knownSecrets, ...(secretScope.getStore() ?? [])])
+  for (const secret of [...secrets].sort((a, b) => b.length - a.length)) {
     out = out.split(secret).join('[redacted]')
   }
   return out
@@ -49,14 +67,8 @@ function emit(level: LogLevel, message: string, fields?: Record<string, unknown>
     msg: redactString(message),
     ...(fields ? (redactValue(fields) as Record<string, unknown>) : {}),
   })
-  // Keep all diagnostics off stdout so `--json` and captured command output
-  // stay machine-readable. Use the process stream directly to avoid coupling
-  // the logger to cli.ts (which imports output.ts, which imports this module).
-  try {
-    process.stderr.write(`${line}\n`)
-  } catch (error) {
-    if ((error as { code?: string }).code !== 'EPIPE') throw error
-  }
+  // Keep diagnostics off stdout and honor any request-local capture sink.
+  writeError(`${line}\n`)
 }
 
 export const log = {

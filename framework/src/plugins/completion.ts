@@ -22,6 +22,7 @@ const completion: CommandModule = {
   commands: {
     install: {
       summary: 'Install dynamic completion in Bash/Zsh startup files; defaults to $SHELL',
+      mcp: 'write',
       options: [{ name: 'shell', type: 'string', completion: ['bash', 'zsh'] }],
       async run(ctx) {
         const result = await installCompletion({
@@ -39,12 +40,14 @@ const completion: CommandModule = {
     },
     bash: {
       summary: 'Print a Bash registration script for this executable',
+      mcp: 'read',
       run(ctx) {
         write(bashCompletion(programIdentity(ctx, 'bash')))
       },
     },
     zsh: {
       summary: 'Print a Zsh registration script; run compinit before sourcing it',
+      mcp: 'read',
       run(ctx) {
         write(zshCompletion(programIdentity(ctx, 'zsh')))
       },

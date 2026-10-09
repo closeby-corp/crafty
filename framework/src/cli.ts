@@ -4,6 +4,7 @@ import { runCommand } from './command.ts'
 import type { RegisteredCommand } from './command.ts'
 import { OpsError, usageError } from './errors.ts'
 import { reportFailure } from './output.ts'
+import { setOutputSink as setInvocationOutputSink, writeError, writeOutput } from './io.ts'
 
 export const PROGRAM = 'crafty'
 
@@ -65,6 +66,11 @@ let configPathOverride: string | undefined
 export async function withCliConfigScope<T>(callback: () => Promise<T>): Promise<T> {
   const current = cliConfigScope.getStore()
   return await cliConfigScope.run({ configPath: current?.configPath }, callback)
+}
+
+/** Run an invocation with the selected client config captured by a host process. */
+export async function withCliConfigPath<T>(path: string | undefined, callback: () => Promise<T>): Promise<T> {
+  return await cliConfigScope.run({ configPath: path }, callback)
 }
 
 /** The `--config` path given on the command line, if any. */
@@ -158,41 +164,19 @@ export function option(values: Values, name: string): string | undefined {
  * ------------------------------------------------------------------ */
 
 /**
- * Where `write` sends its text. Callers can swap this for a capture buffer;
- * `null` restores stdout.
+ * Set the current invocation's sink, or the process fallback outside one.
+ * Independent async invocations keep their output sinks isolated.
  */
-let outputSink: ((text: string) => void) | null = null
-
-/** Returns the sink that was in place, so a caller can restore it on the way out. */
 export function setOutputSink(sink: ((text: string) => void) | null): ((text: string) => void) | null {
-  const previous = outputSink
-  outputSink = sink
-  return previous
-}
-
-/** A closed pipe (`crafty ... | head`) is not a failure worth a stack trace. */
-function onClosedPipe(error: unknown): boolean {
-  return (error as { code?: string }).code === 'EPIPE'
+  return setInvocationOutputSink(sink)
 }
 
 export function write(text: string): void {
-  if (outputSink) {
-    outputSink(text)
-    return
-  }
-  try {
-    process.stdout.write(text)
-  } catch (error) {
-    if (!onClosedPipe(error)) throw error
-  }
+  writeOutput(text)
 }
 
 export function writeErr(text: string): void {
-  try {
-    process.stderr.write(text)
-  } catch (error) {
-    if (!onClosedPipe(error)) throw error
-  }
+  writeError(text)
 }
 
 /* ------------------------------------------------------------------ *
