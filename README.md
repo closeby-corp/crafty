@@ -7,23 +7,21 @@ crafty/
 ├── package.json       # private workspace container
 ├── bun.lock           # shared dependency lockfile
 ├── framework/         # installable crafty package, version 0.5.1
-│   ├── SKILL.md       # packaged command and recipe authoring guidance
+│   ├── SKILL.md       # packaged authoring guidance for commands and recipes
 │   ├── src/
 │   └── test/
-└── client/            # optional infrastructure application
+└── client/            # small example client
     ├── cli.ts         # executable named crafty
-    ├── commands/      # existing command modules + optional completion plugin
-    ├── lib/           # integration helpers
-    ├── recipes/
-    ├── config.example.yml
+    ├── commands/      # demo, echo, version + optional completion plugin
+    ├── lib/           # helper, kept outside commands/ so discovery ignores it
     └── test/
 ```
 
-Requires Bun >= 1.4. The framework supplies command routing, arguments, help, lifecycle hooks, context, and structured output/errors. It ships no integration commands or executable. The optional client owns those commands and imports the framework through its installed `crafty` dependency.
+Requires Bun >= 1.4. The framework supplies command routing, arguments, help, lifecycle hooks, context, and structured output/errors. It ships no integration commands or executable: a client owns those and imports the framework through its installed `crafty` dependency.
 
-The UQ operations client now also runs independently in `~/uq/uq-infra-support/infra/services/ops-cli`, with the executable name `ops`. Its command files are owned by that repository, and its framework dependency is a pinned package artifact—not a workspace link to this checkout. The included `client/` remains unchanged for now as the existing infrastructure application and compatibility suite.
+The UQ infrastructure client runs in `~/uq/uq-infra-support/infra/services/ops-cli`, with the executable name `ops`. Its command files are owned by that repository and its framework dependency is a pinned package artifact — not a workspace link to this checkout. The `client/` here is a four-command example: it exercises discovery, nested routes, a captured parameter, lifecycle hooks, output, and the completion plugin, and its suite is the executable touchstone for the framework contract.
 
-## Run and link the included client
+## Run and link the example client
 
 From the repository root:
 
@@ -31,6 +29,7 @@ From the repository root:
 bun install --frozen-lockfile
 cd client
 bun run cli --help
+bun run cli demo task build show extra --json
 bun link
 ```
 
@@ -38,13 +37,13 @@ With Bun's global bin directory on `PATH`, `crafty --help` works from any direct
 
 Add, edit, or remove a valid command module there and the next invocation sees the change. No rebuild, reinstall, or relink is needed for command changes. Helpers and tests belong outside `commands/`.
 
-The included client uses a Bun workspace dependency on Crafty. Framework and commands are versioned together by this repository's Git history. An independent client can pin the published framework tarball and version its command files separately. `bun link` links the client's executable; no global framework installation is required.
+The example client uses a Bun workspace dependency on Crafty. Framework and commands are versioned together by this repository's Git history. An independent client can pin the published framework tarball and version its command files separately. `bun link` links the client's executable; no global framework installation is required.
 
 Linking another executable with the same name can replace the existing link. Use distinct executable names for multiple clients. `bun unlink` unregisters a client package.
 
 ## Dynamic Bash and Zsh completion
 
-The included client enables the optional standard plugin in `client/commands/completion.ts`:
+The example client enables the optional standard plugin in `client/commands/completion.ts`:
 
 ```ts
 export { default } from 'crafty/plugins/completion'
@@ -77,35 +76,33 @@ Only the framework is packaged. Install the versioned GitHub release asset:
 bun add https://github.com/closeby-corp/crafty/releases/download/v0.5.1/crafty-0.5.1.tgz
 ```
 
-Crafty is not published to npm. The repository root is a private workspace container, not the framework package. See the [framework README](framework/README.md) for the minimal client entrypoint, public API, and command contract. See the [client README](client/README.md) for the existing integrations and configuration.
+Crafty is not published to npm. The repository root is a private workspace container, not the framework package. See the [framework README](framework/README.md) for the minimal client entrypoint, public API, and command contract. See the [example client README](client/README.md) for a four-command client using that contract.
 
-For agent-assisted command and recipe creation, use [`framework/SKILL.md`](framework/SKILL.md), also shipped as `node_modules/crafty/SKILL.md` and exposed as `crafty/SKILL.md`. It covers client discovery, command contracts, configuration access, optional plugins, and the Markdown recipe format for clients that provide a recipe engine. Packaging does not automatically register the skill with an agent.
+For agent-assisted command and recipe creation, use [`framework/SKILL.md`](framework/SKILL.md), also shipped as `node_modules/crafty/SKILL.md` and exposed as `crafty/SKILL.md`. It covers client discovery, command contracts, configuration access, optional plugins, and the Markdown recipe format for clients that provide a recipe engine, with runnable examples. Packaging does not automatically register the skill with an agent.
 
 ## Development
 
 ```bash
 bun install --frozen-lockfile
-bun run test          # framework and client suites
-bun run typecheck     # framework and client TypeScript checks
+bun run test          # framework and example-client suites
+bun run typecheck     # framework and example-client TypeScript checks
 bun run pack          # framework/crafty-0.5.1.tgz
 ```
 
-The framework package's allowlist contains `src/` and `SKILL.md`; standard package metadata and its README are included. Client commands, assets, and integration dependencies are excluded. The old compiled launcher and source-tree installation layout are removed; clients execute through Bun and their installed framework.
+The framework package's allowlist contains `src/` and `SKILL.md`; standard package metadata and its README are included. The example client, its assets, and its dependencies are excluded. The old compiled launcher and source-tree installation layout are removed; clients execute through Bun and their installed framework.
 
 ## 0.5.1
 
 - Removed flag-name suggestions, including after a dash prefix, while preserving commands, configured route identifiers, and values for explicitly typed options.
 - Updated the packaged skill to describe flag-free completion.
-
-Verified: framework and client behavioral suites, both typechecks, CLI queries, and actual Bash Tab interactions with no flag suggestions.
+- Verified: 50 framework tests, 8 example-client tests, both typechecks, CLI queries, and actual Bash Tab interactions with no flag suggestions.
 
 ## 0.5.0
 
 - Added lazy synchronous/asynchronous completion providers for configuration-backed option values and dynamic route parameters.
 - Providers receive the selected configuration path and captured parameters; inherited options respect route-local value metadata.
 - Included the command/recipe authoring skill in the framework package as `SKILL.md`, exposed as `crafty/SKILL.md`.
-
-Verified: 50 framework tests, both workspace typechecks, CLI queries, actual Bash Tab interactions, and an isolated installed-package consumer exercising skill resolution, configured values, and live configuration refresh.
+- Verified: 50 framework tests, 8 example-client tests, both typechecks, CLI queries, and actual Bash Tab interactions using isolated configuration files.
 
 ## 0.4.0
 
@@ -114,6 +111,8 @@ Verified: 50 framework tests, both workspace typechecks, CLI queries, actual Bas
 - Released the completion installer as a versioned GitHub package asset for independent clients, including UQ's `ops` CLI.
 
 Verified: 45 framework tests, 367 client tests, both typechecks, and fresh interactive Bash/Zsh shells using isolated startup files. Actual Tab interactions exercised multiple CLI names and newly added commands without reinstalling. The user's startup files were not modified.
+
+Re-checked after `client/` was reduced to a four-command example: `bun run test` (45 framework, 8 example-client tests), `bun run typecheck`, and `bun run pack` pass, and the packed allowlist still contains only the framework's `src/` plus its manifest and README. The example client ran from an unrelated working directory and through an isolated `bun link`; a command module dropped into `client/commands/` after the last pack was discovered without rebuilding or relinking, and its hooks ran outermost to innermost with reverse teardown. Completion metadata reflected the live registry, and `completion install` stayed idempotent against isolated startup files. The UQ `ops` client (363 tests, framework copy byte-identical to `framework/src`) returned exact rows from a throwaway PostgreSQL 16 fixture for `db sd query events 'id=1'` and `db all query …`, refused multi-statement SQL with its seed rows intact, kept an unknown alias a usage error without connecting, and captured bare and `ops`-prefixed recipe steps as separate envelopes.
 
 ## 0.3.0
 

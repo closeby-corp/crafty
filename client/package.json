@@ -1,7 +1,8 @@
 {
-  "name": "crafty-client",
+  "name": "crafty-example",
   "version": "0.1.0",
   "private": true,
+  "description": "Example crafty client: discovery, nested routes, lifecycle hooks, output and the optional completion plugin",
   "type": "module",
   "bin": { "crafty": "./cli.ts" },
   "engines": { "bun": ">=1.4.0" },

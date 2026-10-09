@@ -1,32 +1,19 @@
-import { emitResult } from 'crafty'
-import { readVersion, VERSION } from '../lib/version.ts'
-import type { CommandModule } from 'crafty'
+import { emitResult, type CommandModule } from 'crafty'
+import { readVersion } from '../lib/manifest.ts'
 
+/**
+ * One handler, two renderings: `emitResult` prints the envelope under `--json`
+ * and the plain string otherwise.
+ */
 export default {
   name: 'version',
-  summary: 'Print the version this build came from',
-  usage: [
-    'crafty version [options]',
-    '',
-    'The version in the manifest, and the Bun it is running on. Both are in the',
-    'envelope so a bug report can name them.',
-    '',
-    'Options:',
-    '  --json      Print the envelope',
-    '  -h, --help  Show this message',
-  ],
-  source: 'version',
+  summary: 'Print this client version and the Bun it runs on',
   run: async (ctx) => {
     const version = await readVersion()
     if (!ctx.json) {
-      emitResult(ctx, `${version} (bun ${Bun.version}, ${process.platform}-${process.arch})`, { truncated: false })
-      return 0
+      emitResult(ctx, `${version} (bun ${Bun.version}, ${process.platform}-${process.arch})`)
+      return
     }
-    emitResult(
-      ctx,
-      { version, built_as: VERSION, bun: Bun.version, platform: process.platform, arch: process.arch },
-      { truncated: false },
-    )
-    return 0
+    emitResult(ctx, { version, bun: Bun.version, platform: process.platform, arch: process.arch })
   },
 } satisfies CommandModule

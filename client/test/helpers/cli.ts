@@ -1,5 +1,5 @@
 import { spyOn } from 'bun:test'
-import { setOutputSink, prepareCommand, runCommand, type CommandModule } from 'crafty'
+import { run, setOutputSink } from 'crafty'
 
 export interface CliCapture {
   code: number
@@ -8,11 +8,10 @@ export interface CliCapture {
 }
 
 /**
- * Runs one command the way the dispatcher does, with stdout captured in-process
- * (the recipe engine's own mechanism) and stderr spied, so a test can assert on
- * exactly what an operator would see.
+ * Run one invocation of the installed registry the way the executable does,
+ * with framework stdout captured in-process and stderr spied.
  */
-export async function runCaptured(command: CommandModule, argv: string[]): Promise<CliCapture> {
+export async function capture(argv: string[]): Promise<CliCapture> {
   let stdout = ''
   const stderr: string[] = []
   const outer = setOutputSink((text) => {
@@ -23,15 +22,14 @@ export async function runCaptured(command: CommandModule, argv: string[]): Promi
     return true
   })
   try {
-    const code = await runCommand(prepareCommand(command.name!, command), argv)
-    return { code, stdout, stderr: stderr.join('') }
+    return { code: await run(argv), stdout, stderr: stderr.join('') }
   } finally {
     setOutputSink(outer)
     spy.mockRestore()
   }
 }
 
-/** The `--json` envelope a command printed, parsed. */
-export function envelope(capture: CliCapture): Record<string, unknown> {
-  return JSON.parse(capture.stdout) as Record<string, unknown>
+/** The `--json` envelope an invocation printed, parsed. */
+export function envelope(result: CliCapture): Record<string, unknown> {
+  return JSON.parse(result.stdout) as Record<string, unknown>
 }

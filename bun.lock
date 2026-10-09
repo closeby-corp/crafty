@@ -6,7 +6,7 @@
       "name": "crafty",
     },
     "client": {
-      "name": "crafty-client",
+      "name": "crafty-example",
       "version": "0.1.0",
       "bin": {
         "crafty": "./cli.ts",
@@ -37,7 +37,7 @@
 
     "crafty": ["crafty@workspace:framework"],
 
-    "crafty-client": ["crafty-client@workspace:client"],
+    "crafty-example": ["crafty-example@workspace:client"],
 
     "typescript": ["typescript@5.9.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
 
