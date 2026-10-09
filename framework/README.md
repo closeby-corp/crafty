@@ -9,7 +9,7 @@ The `crafty` package contains the framework and its [authoring skill](SKILL.md).
 Crafty is not published to npm. Install the versioned GitHub release asset in your client repository:
 
 ```bash
-bun add https://github.com/closeby-corp/crafty/releases/download/v0.5.1/crafty-0.5.1.tgz
+bun add https://github.com/closeby-corp/crafty/releases/download/v0.6.0/crafty-0.6.0.tgz
 ```
 
 Commit the dependency manifest, `bun.lock`, command files, and client entrypoint. The manifest and lockfile select the installed framework version; Git versions the client commands.
@@ -211,6 +211,10 @@ bun pm pack
 `bun run test` includes a packed-consumer test: it creates a tarball, installs it in a temporary client, and exercises its public imports, command discovery, JSON output, errors, logging, and packaged skill from another working directory. CI runs install, tests, and typecheck on Ubuntu, macOS, and Windows with Bun 1.4.2. Bash completion integration is POSIX-only and runs with Bash 4+; core and packed-consumer tests also run on Windows.
 
 The package allowlist includes framework `src/` and `SKILL.md`; the standard manifest and README are also included. It excludes the client workspace and all client-owned skills and integrations. No compiled binary or adjacent-source-tree layout is required.
+
+## 0.6.0 changes
+
+Added the optional `crafty/plugins/skills` factory for validating, listing, showing, and installing client-owned workflow skills. Installs delegate to the pinned Skills CLI, with JSON-verified results for non-interactive installations. Added string option repeatability/sensitivity, selected-route validation, config invocation scoping, safer preview and diagnostic redaction, and cross-platform package-consumer CI. Verified with the complete framework and client suites, both typechecks, a temporary-project install, and skill validation.
 
 ## 0.5.1 changes
 

@@ -6,7 +6,7 @@ A Bun command framework with client-owned TypeScript commands. This repository c
 crafty/
 ├── package.json       # private workspace container
 ├── bun.lock           # shared dependency lockfile
-├── framework/         # installable crafty package, version 0.5.1
+├── framework/         # installable crafty package, version 0.6.0
 │   ├── SKILL.md       # packaged command and CLI workflow authoring guidance
 │   ├── src/
 │   └── test/
@@ -74,7 +74,7 @@ Target handlers and lifecycle hooks do not run during metadata lookup, but comma
 Only the framework is packaged. Install the versioned GitHub release asset:
 
 ```bash
-bun add https://github.com/closeby-corp/crafty/releases/download/v0.5.1/crafty-0.5.1.tgz
+bun add https://github.com/closeby-corp/crafty/releases/download/v0.6.0/crafty-0.6.0.tgz
 ```
 
 Crafty is not published to npm. The repository root is a private workspace container, not the framework package. See the [framework README](framework/README.md) for the minimal client entrypoint, public API, and command contract. See the [example client README](client/README.md) for a client using that contract.
@@ -87,12 +87,19 @@ For agent-assisted command authoring or workflows built around client CLIs, use 
 bun install --frozen-lockfile
 bun run test          # framework and example-client suites
 bun run typecheck     # framework and example-client TypeScript checks
-bun run pack          # framework/crafty-0.5.1.tgz
+bun run pack          # framework/crafty-0.6.0.tgz
 ```
 
 The framework package's allowlist contains `src/` and `SKILL.md`; standard package metadata and its README are included. The example client and its client-only skills, assets, and dependencies are excluded from the framework artifact. Client releases that distribute their own CLI may include that client's `skills/` resources. The old compiled launcher and source-tree installation layout are removed; clients execute through Bun and their installed framework.
 
 `bun run test` includes a packed-consumer check that installs the tarball in a temporary client and exercises the public package from another working directory. CI runs install, tests, and typecheck on Ubuntu, macOS, and Windows with Bun 1.4.2. Bash completion integration is POSIX-only and runs with Bash 4+; core and packed-consumer checks also run on Windows.
+
+## 0.6.0
+
+- Added the optional client-owned skills catalog and installer plugin, backed by pinned `skills@1.7.1`.
+- Added repeatable and sensitive option metadata, selected-route validation, and additional preview redaction.
+- Improved config scoping, logger output, and Bash/Zsh completion portability.
+- Verified: 101 framework tests, 10 example-client tests, both typechecks, skill validation, and an actual temporary-project skill installation.
 
 ## 0.5.1
 

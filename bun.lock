@@ -21,7 +21,7 @@
     },
     "framework": {
       "name": "crafty",
-      "version": "0.5.1",
+      "version": "0.6.0",
       "devDependencies": {
         "@types/bun": "latest",
         "typescript": "^5.9.0",
