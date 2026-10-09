@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test'
 import * as childProcess from 'node:child_process'
 import { EventEmitter } from 'node:events'
-import { writeFileSync } from 'node:fs'
+import { realpathSync, writeFileSync } from 'node:fs'
 import { PassThrough } from 'node:stream'
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -102,7 +102,7 @@ describe('update plugin', () => {
     const updated = await runCaptured(plugin, [])
     expect(updated.code).toBe(0)
     expect(updated.stderr).toContain('Restart crafty to load the new version')
-    expect(await readFile(join(local, 'next.txt'), 'utf8')).toBe('new version\n')
+    expect((await readFile(join(local, 'next.txt'), 'utf8')).replace(/\r\n/g, '\n')).toBe('new version\n')
 
     git(local, ['config', 'user.name', 'Crafty Test'])
     git(local, ['config', 'user.email', 'crafty-test@example.invalid'])
@@ -143,7 +143,7 @@ describe('update plugin', () => {
       expect(ghCalls).toHaveLength(1)
       expect(ghCalls[0]?.args).toContain('--hostname')
       expect(ghCalls[0]?.args.some((arg) => arg.includes('/compare/') && arg.includes('...main'))).toBe(true)
-      expect(ghCalls[0]?.options).toMatchObject({ cwd: local, shell: false, windowsHide: true })
+      expect(ghCalls[0]?.options).toMatchObject({ cwd: realpathSync(local), shell: false, windowsHide: true })
       expect(stderr.join('')).toContain('2 commits available from origin/main')
       expect(stderr.join('')).toContain('also has 1 unpushed commit')
     } finally {
