@@ -1,4 +1,5 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
+import { join, sep } from 'node:path'
 import { commands, loadCommands, setCommands, setOutputSink, type RegisteredCommand } from 'crafty'
 import { capture, envelope } from './helpers/cli.ts'
 
@@ -100,7 +101,7 @@ describe('the example client', () => {
     const entries = envelope(listed).data as Array<{ name: string; description: string; path: string }>
     expect(entries.map(({ name }) => name)).toEqual(['crafty-example-workflow'])
     expect(entries[0]?.description).toContain('example Crafty client')
-    expect(entries[0]?.path).toEndWith('/client/skills/crafty-example-workflow/SKILL.md')
+    expect(entries[0]?.path.split(sep).slice(-4).join(sep)).toBe(join('client', 'skills', 'crafty-example-workflow', 'SKILL.md'))
 
     const shown = await capture(['skills', 'show', 'crafty-example-workflow', '--json'])
     expect(shown.code).toBe(0)
@@ -126,7 +127,7 @@ describe('the example client', () => {
     expect(preview.code).toBe(0)
     const result = data(preview) as { version: string; source: string; target: string; skills: string[]; agents: string[]; argv: string[] }
     expect(result.version).toBe('skills@1.7.1')
-    expect(result.source).toEndWith('/client/skills')
+    expect(result.source.split(sep).slice(-2).join(sep)).toBe(join('client', 'skills'))
     expect(result.target).toBe(process.cwd())
     expect(result.skills).toEqual(['crafty-example-workflow'])
     expect(result.agents).toEqual(['codex'])
